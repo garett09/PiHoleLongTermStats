@@ -109,6 +109,13 @@ parser.add_argument(
     help="How to display client information: 'hostname' (show device names), 'ip' (show IP addresses), or 'both' (show 'Hostname (IP)'). Default: hostname. Env: PIHOLE_LT_STATS_HOSTNAME_DISPLAY",
 )
 
+parser.add_argument(
+    "--group-by-mac",
+    action="store_true",
+    default=os.getenv("PIHOLE_LT_STATS_GROUP_BY_MAC", "false").lower() == "true",
+    help="Group multiple IP addresses (IPv4 and IPv6) by their MAC address for unified device statistics. Env: PIHOLE_LT_STATS_GROUP_BY_MAC",
+)
+
 args = parser.parse_args()
 
 logging.info("Setting environment variables:")
@@ -120,6 +127,7 @@ logging.info(f"PIHOLE_LT_STATS_NDOMAINS : {args.n_domains}")
 logging.info(f"PIHOLE_LT_STATS_TIMEZONE : {args.timezone}")
 logging.info(f"PIHOLE_LT_STATS_IGNORE_DOMAINS : {args.ignore_domains}")
 logging.info(f"PIHOLE_LT_STATS_HOSTNAME_DISPLAY : {args.hostname_display}")
+logging.info(f"PIHOLE_LT_STATS_GROUP_BY_MAC : {args.group_by_mac}")
 logging.info("Initializing PiHoleLongTermStats Dashboard")
 
 
@@ -135,6 +143,7 @@ def serve_layout(
     timezone="UTC",
     ignore_domains="",
     hostname_display="hostname",
+    group_by_mac=False,
 ):
     """Read pihole ftl db, process data, compute stats"""
 
@@ -205,8 +214,21 @@ def serve_layout(
     # (assuming all databases share the same network table)
     hostname_map = load_hostname_mapping(db_paths[0])
     
-    # Resolve hostnames based on display mode
-    df = resolve_hostnames(df, hostname_map, display_mode=hostname_display)
+    # Load MAC mappings for grouping if enabled
+    ip_to_mac = None
+    mac_to_name = None
+    if group_by_mac:
+        ip_to_mac, mac_to_name = load_client_mac_mapping(db_paths[0])
+
+    # Resolve hostnames based on display mode/grouping
+    df = resolve_hostnames(
+        df, 
+        hostname_map, 
+        display_mode=hostname_display,
+        group_by_mac=group_by_mac,
+        ip_to_mac=ip_to_mac,
+        mac_to_name=mac_to_name
+    )
 
     # Load DNS forwarder mapping and process DNS server information
     forwarder_map = load_forwarder_mapping(db_paths[0])
@@ -1173,6 +1195,7 @@ PHLTS_CALLBACK_DATA, initial_layout = serve_layout(
     timezone=args.timezone,
     ignore_domains=args.ignore_domains,
     hostname_display=args.hostname_display,
+    group_by_mac=args.group_by_mac,
 )
 
 logging.info("Setting initial layout...")
@@ -1243,6 +1266,7 @@ def reload_page(n_clicks, start_date, end_date):
         timezone=args.timezone,
         ignore_domains=args.ignore_domains,
         hostname_display=args.hostname_display,
+        group_by_mac=args.group_by_mac,
     )
 
     return layout.children

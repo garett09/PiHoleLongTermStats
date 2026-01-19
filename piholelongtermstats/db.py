@@ -60,7 +60,46 @@ def probe_sample_df(conn):
     return chunksize, latest_ts, oldest_ts
 
 
+def load_hostname_mapping(db_path):
+    """Load hostname mapping from network_addresses table
+    
+    Returns a dictionary mapping IP addresses to hostnames.
+    If a hostname is not available, the IP will not be in the mapping.
+    """
+    conn = connect_to_sql(db_path)
+    cursor = conn.cursor()
+    
+    try:
+        # Query to get IP to hostname mapping from network_addresses table
+        query = """
+        SELECT ip, name 
+        FROM network_addresses 
+        WHERE name IS NOT NULL AND name != ''
+        """
+        cursor.execute(query)
+        
+        # Create mapping dictionary
+        hostname_map = {}
+        for row in cursor.fetchall():
+            ip_address = row[0]
+            hostname = row[1]
+            hostname_map[ip_address] = hostname
+        
+        logging.info(f"Loaded {len(hostname_map)} hostname mappings from network_addresses table")
+        
+    except Exception as e:
+        logging.warning(f"Could not load hostname mapping: {e}")
+        logging.warning("Hostnames will not be available. Falling back to IP addresses.")
+        hostname_map = {}
+    
+    finally:
+        conn.close()
+    
+    return hostname_map
+
+
 def get_timestamp_range(days, start_date, end_date, timezone):
+
     try:
         tz = ZoneInfo(timezone)
     except Exception:
@@ -121,9 +160,11 @@ def read_pihole_ftl_db(
     )
 
     query = f"""
-    SELECT id, timestamp, type, status, domain, client, reply_time	 
-    FROM queries
-    WHERE timestamp >= {start_timestamp} AND timestamp < {end_timestamp};
+    SELECT qs.id, qs.timestamp, qs.type, qs.status, d.domain, c.ip as client, qs.reply_time
+    FROM query_storage qs
+    JOIN client_by_id c ON qs.client = c.id
+    JOIN domain_by_id d ON qs.domain = d.id
+    WHERE qs.timestamp >= {start_timestamp} AND qs.timestamp < {end_timestamp};
     """
 
     for db_idx, db_path in enumerate(db_paths):

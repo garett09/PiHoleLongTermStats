@@ -32,7 +32,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/davistdaniel/piholelongtermstats
+          images: ghcr.io/garett09/piholelongtermstats
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -41,7 +41,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/davistdaniel/piholelongtermstats:latest
-            ghcr.io/davistdaniel/piholelongtermstats:${{ github.sha }}
-            ghcr.io/davistdaniel/piholelongtermstats:${{ github.ref_name }}
+            ghcr.io/garett09/piholelongtermstats:latest
+            ghcr.io/garett09/piholelongtermstats:${{ github.sha }}
+            ghcr.io/garett09/piholelongtermstats:${{ github.ref_name }}
           labels: ${{ steps.meta.outputs.labels }}

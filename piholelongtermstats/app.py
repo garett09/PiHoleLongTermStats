@@ -12,11 +12,12 @@ import pandas as pd
 from dash import Dash, dcc, html, Input, Output, State
 from zoneinfo import ZoneInfo
 
-from piholelongtermstats.db import read_pihole_ftl_db, connect_to_sql, probe_sample_df
+from piholelongtermstats.db import read_pihole_ftl_db, connect_to_sql, probe_sample_df, load_hostname_mapping
 from piholelongtermstats.process import (
     regex_ignore_domains,
     preprocess_df,
     prepare_hourly_aggregated_data,
+    resolve_hostnames,
 )
 from piholelongtermstats.stats import compute_stats
 from piholelongtermstats.plot import (
@@ -87,6 +88,14 @@ parser.add_argument(
     help="Comma-separated list of domains or regex patterns to ignore. Default: no domains ignored. Env: PIHOLE_LT_STATS_IGNORE_DOMAINS",
 )
 
+parser.add_argument(
+    "--hostname-display",
+    type=str,
+    choices=["hostname", "ip", "both"],
+    default=os.getenv("PIHOLE_LT_STATS_HOSTNAME_DISPLAY", "hostname"),
+    help="How to display client information: 'hostname' (show device names), 'ip' (show IP addresses), or 'both' (show 'Hostname (IP)'). Default: hostname. Env: PIHOLE_LT_STATS_HOSTNAME_DISPLAY",
+)
+
 args = parser.parse_args()
 
 logging.info("Setting environment variables:")
@@ -97,6 +106,7 @@ logging.info(f"PIHOLE_LT_STATS_NCLIENTS : {args.n_clients}")
 logging.info(f"PIHOLE_LT_STATS_NDOMAINS : {args.n_domains}")
 logging.info(f"PIHOLE_LT_STATS_TIMEZONE : {args.timezone}")
 logging.info(f"PIHOLE_LT_STATS_IGNORE_DOMAINS : {args.ignore_domains}")
+logging.info(f"PIHOLE_LT_STATS_HOSTNAME_DISPLAY : {args.hostname_display}")
 logging.info("Initializing PiHoleLongTermStats Dashboard")
 
 
@@ -111,6 +121,7 @@ def serve_layout(
     end_date=None,
     timezone="UTC",
     ignore_domains="",
+    hostname_display="hostname",
 ):
     """Read pihole ftl db, process data, compute stats"""
 
@@ -176,6 +187,13 @@ def serve_layout(
 
     # process timestamps according to timezone
     df = preprocess_df(df, timezone=timezone)
+
+    # Load hostname mapping from the first database
+    # (assuming all databases share the same network table)
+    hostname_map = load_hostname_mapping(db_paths[0])
+    
+    # Resolve hostnames based on display mode
+    df = resolve_hostnames(df, hostname_map, display_mode=hostname_display)
 
     # compute the stats
     stats = compute_stats(df, min_date_available, max_date_available)
@@ -1018,6 +1036,7 @@ PHLTS_CALLBACK_DATA, initial_layout = serve_layout(
     end_date=None,
     timezone=args.timezone,
     ignore_domains=args.ignore_domains,
+    hostname_display=args.hostname_display,
 )
 
 logging.info("Setting initial layout...")
@@ -1087,6 +1106,7 @@ def reload_page(n_clicks, start_date, end_date):
         end_date=end_date,
         timezone=args.timezone,
         ignore_domains=args.ignore_domains,
+        hostname_display=args.hostname_display,
     )
 
     return layout.children

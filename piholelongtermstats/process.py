@@ -27,6 +27,48 @@ def regex_ignore_domains(df, pattern):
         return df
 
 
+def resolve_hostnames(df, hostname_map, display_mode="hostname"):
+    """Resolve IP addresses to hostnames based on the hostname mapping
+    
+    Args:
+        df: DataFrame with 'client' column containing IP addresses
+        hostname_map: Dictionary mapping IP addresses to hostnames
+        display_mode: How to display client information
+            - 'hostname': Show hostname (fallback to IP if not available)
+            - 'ip': Show IP address only
+            - 'both': Show "Hostname (IP)" format
+    
+    Returns:
+        DataFrame with 'client' column updated to display values
+        and 'client_ip' column preserving original IP addresses
+    """
+    logging.info(f"Resolving hostnames with display mode: {display_mode}")
+    
+    # Preserve original IP addresses in client_ip column
+    df["client_ip"] = df["client"]
+    
+    if display_mode == "ip":
+        # Keep IP addresses as-is (no changes needed)
+        logging.info("Using IP addresses for client display")
+    elif display_mode == "both":
+        # Show "Hostname (IP)" or just "IP" if no hostname
+        df["client"] = df["client"].apply(
+            lambda ip: f"{hostname_map[ip]} ({ip})" if ip in hostname_map else ip
+        )
+        logging.info("Using 'Hostname (IP)' format for client display")
+    else:  # hostname mode (default)
+        # Show hostname if available, otherwise show IP
+        df["client"] = df["client"].apply(
+            lambda ip: hostname_map.get(ip, ip)
+        )
+        hostnames_resolved = df["client"].ne(df["client_ip"]).sum()
+        logging.info(
+            f"Resolved {hostnames_resolved} out of {len(df)} queries to hostnames"
+        )
+    
+    return df
+
+
 def preprocess_df(df, timezone="UTC"):
     """Pre-process df to generate timestamps, blocked,allowed domains etc."""
 
@@ -70,7 +112,7 @@ def prepare_hourly_aggregated_data(df, n_clients):
     """Pre-aggregate data by hour"""
     logging.info("Pre-aggregating data by hour for callbacks...")
 
-    # aggregate by hour, status_type, and client
+    # aggregate by hour, status_type, and client (which now contains display names)
     hourly_agg = (
         df.groupby([pd.Grouper(key="timestamp", freq="h"), "status_type", "client"])
         .size()

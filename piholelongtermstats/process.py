@@ -191,8 +191,24 @@ def prepare_hourly_aggregated_data(df, n_clients):
     # get top n_clients clients for client activity view
     top_clients = df["client"].value_counts().nlargest(n_clients).index.tolist()
 
+    # aggregate by hour and dns_category for Unbound trend
+    unbound_trend_agg = (
+        df.groupby([pd.Grouper(key="timestamp", freq="h"), "dns_category"])
+        .size()
+        .reset_index(name="count")
+    )
+
+    # aggregate by hour and query_type for adoption trend
+    query_type_trend_agg = (
+        df.groupby([pd.Grouper(key="timestamp", freq="h"), "query_type"])
+        .size()
+        .reset_index(name="count")
+    )
+
     logging.info("Hourly aggregation complete")
     return {
         "hourly_agg": hourly_agg,
         "top_clients": top_clients,
+        "unbound_trend_agg": unbound_trend_agg,
+        "query_type_trend_agg": query_type_trend_agg,
     }

@@ -127,6 +127,22 @@ def generate_plot_data(df, n_clients, n_domains):
         .reindex(order)
     )
 
+    # plot data for DNS server distribution
+    dns_server_df = (
+        df["dns_category"]
+        .value_counts()
+        .reset_index()
+        .rename(columns={"index": "DNS Server", "dns_category": "Count"})
+    )
+
+    # plot data for query type distribution
+    query_type_df = (
+        df["query_type"]
+        .value_counts()
+        .reset_index()
+        .rename(columns={"index": "Query Type", "query_type": "Count"})
+    )
+
     del df_top, top_clients, top_domains, tmp_allowed, tmp_blocked
     gc.collect()
 
@@ -143,6 +159,8 @@ def generate_plot_data(df, n_clients, n_domains):
         "day_hour_heatmap": day_hour_heatmap,
         "blocked_day_hour_heatmap": blocked_day_hour_heatmap,
         "allowed_day_hour_heatmap": allowed_day_hour_heatmap,
+        "dns_server_df": dns_server_df,
+        "query_type_df": query_type_df,
     }
 
 

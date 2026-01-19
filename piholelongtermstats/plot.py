@@ -338,25 +338,32 @@ def generate_client_activity_over_time(callback_data, n_clients, client=None):
     return fig
 
 
-def generate_dns_server_pie(plot_data):
+def generate_dns_server_pie(callback_data, client=None):
     """Generate DNS server distribution pie chart"""
-    df = plot_data["dns_server_df"]
+    df = callback_data["unbound_trend_agg"]
     
+    if client is not None:
+        df = df[df["client"] == client]
+
     if df.empty:
         return px.pie(title="No DNS Server Data")
 
+    # Sum counts by category
+    df_sum = df.groupby("dns_category")["count"].sum().reset_index()
+    df_sum.columns = ["DNS Server", "count"]
+
     fig = px.pie(
-        df,
-        values="Count",
+        df_sum,
+        values="count",
         names="DNS Server",
-        title="DNS Server Distribution",
+        title="DNS Server Distribution" + (f" for {client}" if client else ""),
         color="DNS Server",
         color_discrete_map={
-            "Unbound IPv4": "#3498db",
-            "Unbound IPv6": "#2980b9",
-            "Cached/Blocked": "#10b981",
-            "Router": "#f16722",
-            "Other": "#7f8c8d"
+            "Unbound IPv4": "#3498db",  # Standard Blue
+            "Unbound IPv6": "#6c5ce7",  # Vibrant Indigo/Purple
+            "Cached/Blocked": "#10b981", # Success Green
+            "Router": "#f16722",         # Router Orange
+            "Other": "#7f8c8d"           # Muted Gray
         },
         template="plotly_white",
         hole=0.4
@@ -368,19 +375,25 @@ def generate_dns_server_pie(plot_data):
     return fig
 
 
-def generate_query_type_pie(plot_data):
+def generate_query_type_pie(callback_data, client=None):
     """Generate query type distribution pie chart"""
-    df = plot_data["query_type_df"]
+    df = callback_data["query_type_trend_agg"]
     
+    if client is not None:
+        df = df[df["client"] == client]
+
     if df.empty:
         return px.pie(title="No Query Type Data")
 
-    # Use a colorful scale but keep main ones consistent
+    # Sum counts by category
+    df_sum = df.groupby("query_type")["count"].sum().reset_index()
+    df_sum.columns = ["Query Type", "count"]
+
     fig = px.pie(
-        df,
-        values="Count",
+        df_sum,
+        values="count",
         names="Query Type",
-        title="Query Type Distribution",
+        title="Query Type Distribution" + (f" for {client}" if client else ""),
         template="plotly_white",
         hole=0.4
     )
@@ -391,25 +404,31 @@ def generate_query_type_pie(plot_data):
     return fig
 
 
-def generate_unbound_usage_over_time(callback_data):
+def generate_unbound_usage_over_time(callback_data, client=None):
     """Generate Unbound IPv4 vs IPv6 usage over time area chart"""
     df = callback_data["unbound_trend_agg"]
     
+    if client is not None:
+        df = df[df["client"] == client]
+
     # Filter for only Unbound categories
     df = df[df["dns_category"].isin(["Unbound IPv4", "Unbound IPv6"])].copy()
     
     if df.empty:
         return px.area(title="No Unbound Usage Data Over Time", template="plotly_white")
 
+    # Aggregate by timestamp and category (in case multiple clients are selected or global view)
+    df_grouped = df.groupby(["timestamp", "dns_category"])["count"].sum().reset_index()
+
     fig = px.area(
-        df,
+        df_grouped,
         x="timestamp",
         y="count",
         color="dns_category",
-        title="Unbound IPv4 vs IPv6 Usage Over Time",
+        title="Unbound IPv4 vs IPv6 Usage Over Time" + (f" for {client}" if client else ""),
         color_discrete_map={
-            "Unbound IPv4": "#3498db",
-            "Unbound IPv6": "#2980b9",
+            "Unbound IPv4": "#3498db",  # Standard Blue
+            "Unbound IPv6": "#6c5ce7",  # Vibrant Indigo/Purple
         },
         template="plotly_white",
         labels={"timestamp": "Time", "count": "Queries", "dns_category": "Server"}

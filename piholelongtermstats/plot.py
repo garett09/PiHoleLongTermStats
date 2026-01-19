@@ -46,8 +46,8 @@ def generate_plot_data(df, n_clients, n_domains):
         .value_counts()
         .nlargest(n_domains)
         .reset_index()
-        .rename(columns={"index": "Count", "domain": "Domain"})
     )
+    blocked_df.columns = ["Domain", "count"]
 
     tmp_allowed = df[df["status_type"] == "Allowed"].copy()
     tmp_allowed["domain"] = tmp_allowed["domain"].apply(shorten)
@@ -57,8 +57,8 @@ def generate_plot_data(df, n_clients, n_domains):
         .value_counts()
         .nlargest(n_domains)
         .reset_index()
-        .rename(columns={"index": "Count", "domain": "Domain"})
     )
+    allowed_df.columns = ["Domain", "count"]
 
     logging.info("Generated plot data for allowed and blocked domains.")
 
@@ -132,16 +132,16 @@ def generate_plot_data(df, n_clients, n_domains):
         df["dns_category"]
         .value_counts()
         .reset_index()
-        .rename(columns={"index": "DNS Server", "dns_category": "Count"})
     )
+    dns_server_df.columns = ["DNS Server", "count"]
 
     # plot data for query type distribution
     query_type_df = (
         df["query_type"]
         .value_counts()
         .reset_index()
-        .rename(columns={"index": "Query Type", "query_type": "Count"})
     )
+    query_type_df.columns = ["Query Type", "count"]
 
     del df_top, top_clients, top_domains, tmp_allowed, tmp_blocked
     gc.collect()

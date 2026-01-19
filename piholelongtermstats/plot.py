@@ -335,11 +335,87 @@ def generate_client_activity_over_time(callback_data, n_clients, client=None):
         connectgaps=False,
     )
 
-    fig.update_layout(
-        legend=dict(orientation="h", yanchor="top", y=-0.4, xanchor="center", x=0.5)
+    return fig
+
+
+def generate_dns_server_pie(plot_data):
+    """Generate DNS server distribution pie chart"""
+    df = plot_data["dns_server_df"]
+    
+    if df.empty:
+        return px.pie(title="No DNS Server Data")
+
+    fig = px.pie(
+        df,
+        values="Count",
+        names="DNS Server",
+        title="DNS Server Distribution",
+        color="DNS Server",
+        color_discrete_map={
+            "Unbound IPv4": "#3498db",
+            "Unbound IPv6": "#2980b9",
+            "Cached/Blocked": "#10b981",
+            "Router": "#f16722",
+            "Other": "#7f8c8d"
+        },
+        template="plotly_white",
+        hole=0.4
     )
+    
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+    fig.update_layout(showlegend=False)
+    
+    return fig
 
-    del dff_grouped, pivot_df
-    gc.collect()
 
+def generate_query_type_pie(plot_data):
+    """Generate query type distribution pie chart"""
+    df = plot_data["query_type_df"]
+    
+    if df.empty:
+        return px.pie(title="No Query Type Data")
+
+    # Use a colorful scale but keep main ones consistent
+    fig = px.pie(
+        df,
+        values="Count",
+        names="Query Type",
+        title="Query Type Distribution",
+        template="plotly_white",
+        hole=0.4
+    )
+    
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+    fig.update_layout(showlegend=True, legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="center", x=0.5))
+    
+    return fig
+
+
+def generate_unbound_usage_over_time(callback_data):
+    """Generate Unbound IPv4 vs IPv6 usage over time area chart"""
+    df = callback_data["unbound_trend_agg"]
+    
+    # Filter for only Unbound categories
+    df = df[df["dns_category"].isin(["Unbound IPv4", "Unbound IPv6"])].copy()
+    
+    if df.empty:
+        return px.area(title="No Unbound Usage Data Over Time", template="plotly_white")
+
+    fig = px.area(
+        df,
+        x="timestamp",
+        y="count",
+        color="dns_category",
+        title="Unbound IPv4 vs IPv6 Usage Over Time",
+        color_discrete_map={
+            "Unbound IPv4": "#3498db",
+            "Unbound IPv6": "#2980b9",
+        },
+        template="plotly_white",
+        labels={"timestamp": "Time", "count": "Queries", "dns_category": "Server"}
+    )
+    
+    fig.update_traces(mode="lines", line_shape="spline", line=dict(width=0.5), stackgroup="one")
+    fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5))
+    
     return fig

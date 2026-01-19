@@ -1277,7 +1277,9 @@ def serve_layout(
                     html.Div(
                         [
                             html.H2("Average Reply Time"),
-                            html.H5("Daily average reply time in ms."),
+                            html.H5(
+                                f"{plot_data.get('reply_time_granularity', 'Daily')} average reply time in ms."
+                            ),
                             dcc.Graph(
                                 id="avg-reply-time",
                                 figure=px.line(

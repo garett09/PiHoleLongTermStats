@@ -233,11 +233,8 @@ def serve_layout(
     # (assuming all databases share the same network table)
     hostname_map = load_hostname_mapping(db_paths[0])
     
-    # Load MAC mappings for grouping if enabled
-    ip_to_mac = None
-    mac_to_name = None
-    if group_by_mac:
-        ip_to_mac, mac_to_name = load_client_mac_mapping(db_paths[0])
+    # Load MAC mappings for grouping and device activity naming
+    ip_to_mac, mac_to_name = load_client_mac_mapping(db_paths[0])
 
     # Resolve hostnames based on display mode/grouping
     df = resolve_hostnames(

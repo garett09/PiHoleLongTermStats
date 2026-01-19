@@ -475,8 +475,11 @@ def _device_activity_stats(stats, df, device_activity, ip_to_mac, mac_to_name=No
     Compute device activity patterns by combining current query data 
     with lifetime network table metrics.
     """
-    if not device_activity or not ip_to_mac:
-        logging.info("No device activity or MAC mapping available for stats.")
+    if not device_activity:
+        logging.info("No device activity metrics found in Pi-hole network table.")
+        stats["newest_device_name"] = "No Network Data"
+        stats["most_active_device_name"] = "No Network Data"
+        stats["dormant_device_count"] = 0
         return stats
 
     # Get newest device (most recently first seen)

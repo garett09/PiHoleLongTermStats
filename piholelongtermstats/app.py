@@ -9,8 +9,9 @@ import logging
 import psutil
 import plotly.express as px
 import pandas as pd
-from dash import Dash, dcc, html, Input, Output, State
+from dash import Dash, dcc, html, Input, Output, State, ctx
 from zoneinfo import ZoneInfo
+import datetime
 
 from piholelongtermstats.db import (
     read_pihole_ftl_db,
@@ -18,6 +19,7 @@ from piholelongtermstats.db import (
     probe_sample_df,
     load_hostname_mapping,
     load_client_mac_mapping,
+    load_device_activity,
     load_forwarder_mapping,
     categorize_dns_server,
 )
@@ -37,7 +39,10 @@ from piholelongtermstats.plot import (
     generate_dns_server_pie,
     generate_query_type_pie,
     generate_unbound_usage_over_time,
+    generate_device_activity_heatmap,
+    generate_unbound_performance_chart,
 )
+from piholelongtermstats.unbound_stats import get_unbound_stats
 
 __version__ = "0.2.1"
 
@@ -116,6 +121,13 @@ parser.add_argument(
     help="Group multiple IP addresses (IPv4 and IPv6) by their MAC address for unified device statistics. Env: PIHOLE_LT_STATS_GROUP_BY_MAC",
 )
 
+parser.add_argument(
+    "--unbound-control-cmd",
+    type=str,
+    default=os.getenv("PIHOLE_LT_STATS_UNBOUND_CMD", "unbound-control"),
+    help="Command prefix for unbound-control. Useful for 'sudo unbound-control'. Default: unbound-control. Env: PIHOLE_LT_STATS_UNBOUND_CMD",
+)
+
 args = parser.parse_args()
 
 logging.info("Setting environment variables:")
@@ -144,8 +156,14 @@ def serve_layout(
     ignore_domains="",
     hostname_display="hostname",
     group_by_mac=False,
+    unbound_stats=None,
 ):
     """Read pihole ftl db, process data, compute stats"""
+
+    if unbound_stats is None:
+        # Fetch Unbound real-time stats (Phase 5)
+        unbound_cmd = args.unbound_control_cmd.split()
+        unbound_stats = get_unbound_stats(command_prefix=unbound_cmd)
 
     if isinstance(db_path, str):
         db_paths = db_path.split(",")
@@ -176,12 +194,13 @@ def serve_layout(
 
     df = pd.concat(
         read_pihole_ftl_db(
-            db_paths,
+            db_paths=db_paths,
             days=days,
-            chunksize=chunksize_list,
             start_date=start_date,
             end_date=end_date,
+            chunksize=chunksize_list,
             timezone=timezone,
+            min_date_available=min_date_available,
         ),
         ignore_index=True,
     )
@@ -234,11 +253,21 @@ def serve_layout(
     forwarder_map = load_forwarder_mapping(db_paths[0])
     df = process_dns_servers(df, forwarder_map, categorize_dns_server)
     
-    # Add query type information
+    # Process query types
     df = add_query_type_info(df)
 
-    # compute the stats
-    stats = compute_stats(df, min_date_available, max_date_available)
+    # Load device activity metrics (Phase 4)
+    device_activity = load_device_activity(db_paths[0])
+
+    # compute stats
+    stats = compute_stats(
+        df, 
+        max_date_available, 
+        min_date_available,
+        device_activity=device_activity,
+        ip_to_mac=ip_to_mac,
+        mac_to_name=mac_to_name
+    )
 
     # generate plot data
     plot_data = generate_plot_data(df, args.n_clients, args.n_domains)
@@ -269,6 +298,8 @@ def serve_layout(
     initial_dns_pie_fig = generate_dns_server_pie(callback_data=callback_data)
     initial_query_type_fig = generate_query_type_pie(callback_data=callback_data)
     initial_unbound_trend_fig = generate_unbound_usage_over_time(callback_data=callback_data)
+    initial_activity_heatmap_fig = generate_device_activity_heatmap(callback_data=callback_data)
+    initial_unbound_perf_fig = generate_unbound_performance_chart(unbound_stats)
 
     layout = html.Div(
         [
@@ -281,10 +312,23 @@ def serve_layout(
             ),
             html.Div(
                 [
+                    html.Div(
+                        [
+                            html.Button("1D", id="quick-1d", className="quick-filter-btn"),
+                            html.Button("1W", id="quick-1w", className="quick-filter-btn"),
+                            html.Button("1M", id="quick-1m", className="quick-filter-btn"),
+                            html.Button("3M", id="quick-3m", className="quick-filter-btn"),
+                            html.Button("1Y", id="quick-1y", className="quick-filter-btn"),
+                            html.Button("All", id="quick-all", className="quick-filter-btn"),
+                        ],
+                        className="quick-filter-container",
+                    ),
                     dcc.DatePickerRange(
                         id="date-picker-range",
-                        display_format="DD-MM-YYYY",
-                        minimum_nights=2,
+                        display_format="MMM DD, YYYY",
+                        start_date=start_date,
+                        end_date=end_date,
+                        minimum_nights=1,
                         start_date_placeholder_text="Start",
                         end_date_placeholder_text="End",
                         className="date-picker-btn",
@@ -848,6 +892,102 @@ def serve_layout(
                 className="kpi-container",
             ),
             html.Br(),
+            # Unbound Real-time Health Section
+            html.H2("Unbound Real-time Health"),
+            html.H5("Live performance metrics directly from the Unbound recursive resolver"),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.H3("Cache Hit Rate"),
+                            html.P(f"{unbound_stats.get('cache_hit_rate', 0):.2f}%") if unbound_stats else html.P("N/A"),
+                            html.P(
+                                f"{unbound_stats.get('total.num.cachehits', 0):,} hits / {unbound_stats.get('total.num.cachemiss', 0):,} misses" if unbound_stats else "Service unavailable",
+                                style={"fontSize": "13px", "color": "#666", "marginTop": "2px"},
+                            ),
+                        ],
+                        className="cardunbound",
+                    ),
+                    html.Div(
+                        [
+                            html.H3("Recursion Time (Avg)"),
+                            html.P(f"{unbound_stats.get('total.recursion.time.avg', 0) * 1000:.2f} ms") if unbound_stats else html.P("N/A"),
+                            html.P(
+                                f"Median: {unbound_stats.get('total.recursion.time.median', 0) * 1000:.2f} ms" if unbound_stats else "Service unavailable",
+                                style={"fontSize": "13px", "color": "#666", "marginTop": "2px"},
+                            ),
+                        ],
+                        className="cardunbound",
+                    ),
+                    html.Div(
+                        [
+                            html.H3("Unbound Uptime"),
+                            html.P(f"{unbound_stats.get('uptime_str', 'N/A')}") if unbound_stats else html.P("N/A"),
+                            html.P(
+                                "Continuous resolver operation" if unbound_stats else "Service unavailable",
+                                style={"fontSize": "13px", "color": "#666", "marginTop": "2px"},
+                            ),
+                        ],
+                        className="cardunbound",
+                    ),
+                ],
+                className="kpi-container",
+            ),
+            html.Br(),
+            # Device Activity Insights Section
+            html.H2("Device Activity Insights"),
+            html.H5("Lifetime device metrics and network presence patterns"),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.H3("Newest Device"),
+                            html.P(f"{stats.get('newest_device_name', 'N/A')}"),
+                            html.P(
+                                [
+                                    f"First Seen: {stats.get('newest_device_first_seen', 'N/A')}",
+                                    html.Br(),
+                                    f"Last Active: {stats.get('newest_device_last_seen', 'N/A')}",
+                                ],
+                                style={"fontSize": "13px", "color": "#666", "marginTop": "5px"},
+                            ),
+                        ],
+                        className="cardactivity",
+                    ),
+                    html.Div(
+                        [
+                            html.H3("Most Active (Lifetime)"),
+                            html.P(f"{stats.get('most_active_device_name', 'N/A')}"),
+                            html.P(
+                                [
+                                    f"First Seen: {stats.get('most_active_device_first_seen', 'N/A')}",
+                                    html.Br(),
+                                    f"Queries: {stats.get('most_active_device_queries', 0):,}",
+                                ],
+                                style={"fontSize": "13px", "color": "#666", "marginTop": "5px"},
+                            ),
+                        ],
+                        className="cardactivity",
+                    ),
+                    html.Div(
+                        [
+                            html.H3("Dormant Devices"),
+                            html.P(f"{stats.get('dormant_device_count', 0)} devices"),
+                            html.P(
+                                [
+                                    "Inactive for more than 30 days",
+                                    html.Br(),
+                                    "Consider cleaning network table",
+                                ],
+                                style={"fontSize": "13px", "color": "#666", "marginTop": "5px"},
+                            ),
+                        ],
+                        className="cardactivity",
+                    ),
+                ],
+                className="kpi-container",
+            ),
+            html.Br(),
             # DNS Analytics Charts
             html.Div(
                 [
@@ -867,6 +1007,20 @@ def serve_layout(
                 [
                     html.Div(
                         [dcc.Graph(id="unbound-trend-view", figure=initial_unbound_trend_fig)],
+                        className="cardplot",
+                    ),
+                    html.Div(
+                        [dcc.Graph(id="unbound-perf-pie", figure=initial_unbound_perf_fig)],
+                        className="cardplot",
+                    ),
+                ],
+                className="row",
+            ),
+            html.Br(),
+            html.Div(
+                [
+                    html.Div(
+                        [dcc.Graph(id="activity-heatmap", figure=initial_activity_heatmap_fig)],
                         className="cardplot",
                     ),
                 ],
@@ -1224,14 +1378,57 @@ gc.collect()
 @app.callback(
     Output("page-container", "children"),
     Input("reload-button", "n_clicks"),
+    Input("quick-1d", "n_clicks"),
+    Input("quick-1w", "n_clicks"),
+    Input("quick-1m", "n_clicks"),
+    Input("quick-3m", "n_clicks"),
+    Input("quick-1y", "n_clicks"),
+    Input("quick-all", "n_clicks"),
     State("date-picker-range", "start_date"),
     State("date-picker-range", "end_date"),
     prevent_initial_call=True,
 )
-def reload_page(n_clicks, start_date, end_date):
+def reload_page(n_clicks, q1, qw, qm, q3m, qy, qall, start_date, end_date):
     global PHLTS_CALLBACK_DATA
 
-    logging.info(f"Reload button clicked. Selected date range: {start_date, end_date}")
+    triggered_id = ctx.triggered_id
+    logging.info(f"Triggered by: {triggered_id}")
+
+    # Determine date range based on trigger
+    if triggered_id.startswith("quick-"):
+        # We need the latest timestamp to calculate backwards
+        # For simplicity, we use the current end_date or now
+        latest_conn = connect_to_sql(db_paths[0])
+        _, latest_ts_raw, _ = probe_sample_df(latest_conn)
+        latest_conn.close()
+        latest_dt = latest_ts_raw.tz_convert(ZoneInfo(args.timezone))
+        
+        end_date = latest_dt.strftime("%Y-%m-%d")
+        
+        if triggered_id == "quick-1d":
+            start_dt = latest_dt - datetime.timedelta(days=1)
+        elif triggered_id == "quick-1w":
+            start_dt = latest_dt - datetime.timedelta(days=7)
+        elif triggered_id == "quick-1m":
+            start_dt = latest_dt - datetime.timedelta(days=30)
+        elif triggered_id == "quick-3m":
+            start_dt = latest_dt - datetime.timedelta(days=90)
+        elif triggered_id == "quick-1y":
+            start_dt = latest_dt - datetime.timedelta(days=365)
+        elif triggered_id == "quick-all":
+            start_dt = None # serve_layout handles None as full range
+            end_date = None
+        
+        if start_dt:
+            start_date = start_dt.strftime("%Y-%m-%d")
+        
+        logging.info(f"Preset {triggered_id} selected. Calculated range: {start_date} to {end_date}")
+
+    logging.info(f"Reloading page with range: {start_date} to {end_date}")
+
+    # Fetch Unbound real-time stats (Phase 5)
+    unbound_cmd = args.unbound_control_cmd.split()
+    unbound_stats = get_unbound_stats(command_prefix=unbound_cmd)
 
     chunksize_list, latest_ts_list, oldest_ts_list = (
         [],
@@ -1246,13 +1443,6 @@ def reload_page(n_clicks, start_date, end_date):
         latest_ts_list.append(latest_ts.tz_convert(ZoneInfo(args.timezone)))
         oldest_ts_list.append(oldest_ts.tz_convert(ZoneInfo(args.timezone)))
         conn.close()
-
-    logging.info(
-        f"Latest date-time from all databases : {max(latest_ts_list)} (TZ: {args.timezone})"
-    )
-    logging.info(
-        f"Oldest date-time from all databases : {min(oldest_ts_list)} (TZ: {args.timezone})"
-    )
 
     PHLTS_CALLBACK_DATA, layout = serve_layout(
         db_path=args.db_path,
@@ -1308,6 +1498,7 @@ def update_client_activity(client, n_clicks):
     Output("dns-server-pie", "figure"),
     Output("query-type-pie", "figure"),
     Output("unbound-trend-view", "figure"),
+    Output("activity-heatmap", "figure"),
     Input("client-filter", "value"),
     Input("reload-button", "n_clicks"),
     prevent_initial_call=True,
@@ -1325,8 +1516,11 @@ def update_dns_analytics(client, n_clicks):
     unbound_trend = generate_unbound_usage_over_time(
         callback_data=PHLTS_CALLBACK_DATA, client=client
     )
+    activity_heatmap = generate_device_activity_heatmap(
+        callback_data=PHLTS_CALLBACK_DATA, client=client
+    )
 
-    return dns_pie, query_pie, unbound_trend
+    return dns_pie, query_pie, unbound_trend, activity_heatmap
 
 
 def run():

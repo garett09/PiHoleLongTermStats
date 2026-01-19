@@ -4,6 +4,8 @@
 
 import logging
 import gc
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 def _main_heading_stats(stats, df, min_date_available, max_date_available):
@@ -468,7 +470,49 @@ def _query_type_stats(stats, df):
     return stats
 
 
-def compute_stats(df, min_date_available, max_date_available):
+def _device_activity_stats(stats, df, device_activity, ip_to_mac, mac_to_name=None):
+    """
+    Compute device activity patterns by combining current query data 
+    with lifetime network table metrics.
+    """
+    if not device_activity or not ip_to_mac:
+        logging.info("No device activity or MAC mapping available for stats.")
+        return stats
+
+    # Get newest device (most recently first seen)
+    valid_devices = {mac: data for mac, data in device_activity.items() if data["first_seen"]}
+    if valid_devices:
+        newest_mac = max(valid_devices, key=lambda k: valid_devices[k]["first_seen"])
+        stats["newest_device_mac"] = newest_mac
+        stats["newest_device_first_seen"] = valid_devices[newest_mac]["first_seen"].strftime("%-d %B %Y")
+        stats["newest_device_last_seen"] = valid_devices[newest_mac]["last_query"].strftime("%-d %B %Y %H:%M") if valid_devices[newest_mac]["last_query"] else "Never"
+        stats["newest_device_vendor"] = valid_devices[newest_mac]["vendor"]
+        stats["newest_device_name"] = mac_to_name.get(newest_mac, stats["newest_device_vendor"]) if mac_to_name else stats["newest_device_vendor"]
+    
+    # Get most active device (lifetime)
+    active_mac = max(device_activity, key=lambda k: device_activity[k]["lifetime_queries"])
+    stats["most_active_device_mac"] = active_mac
+    stats["most_active_device_queries"] = device_activity[active_mac]["lifetime_queries"]
+    stats["most_active_device_first_seen"] = device_activity[active_mac]["first_seen"].strftime("%-d %B %Y") if device_activity[active_mac]["first_seen"] else "Unknown"
+    stats["most_active_device_last_seen"] = device_activity[active_mac]["last_query"].strftime("%-d %B %Y %H:%M") if device_activity[active_mac]["last_query"] else "Never"
+    stats["most_active_device_vendor"] = device_activity[active_mac]["vendor"]
+    stats["most_active_device_name"] = mac_to_name.get(active_mac, stats["most_active_device_vendor"]) if mac_to_name else stats["most_active_device_vendor"]
+
+    # Identify dormant devices (last query > 30 days ago)
+    now = datetime.now(ZoneInfo("UTC"))
+    dormant_count = 0
+    for mac, data in device_activity.items():
+        if data["last_query"]:
+            days_since = (now - data["last_query"]).days
+            if days_since > 30:
+                dormant_count += 1
+    stats["dormant_device_count"] = dormant_count
+
+    logging.info("Computed device activity stats.")
+    return stats
+
+
+def compute_stats(df, min_date_available, max_date_available, device_activity=None, ip_to_mac=None, mac_to_name=None):
     """Compute all statistics and return them as a dictionary"""
 
     logging.info("Started computing stats...")
@@ -505,6 +549,9 @@ def compute_stats(df, min_date_available, max_date_available):
     
     # Query type analytics
     stats = _query_type_stats(stats, df)
+
+    # Device activity analytics (Phase 4)
+    stats = _device_activity_stats(stats, df, device_activity, ip_to_mac, mac_to_name)
 
     df_sorted = df.sort_values("timestamp").copy()
     df_sorted["is_blocked"] = df_sorted["status_type"] == "Blocked"

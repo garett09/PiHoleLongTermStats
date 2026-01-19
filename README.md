@@ -20,6 +20,10 @@ See more [screenshots](https://github.com/davistdaniel/PiHoleLongTermStats/blob/
 - ➕ Combine multiple databases and visualize consolidated stats.
 - 🗂️ Info cards : Query stats, Activity stats, Day and Night stats. See [all supported metrics](https://github.com/davistdaniel/PiHoleLongTermStats?tab=readme-ov-file#supported-metrics).
 - 📈 Interactive charts for query trends and client behavior, heatmaps showing day-hour stats, reply-times visualisation and more.
+- 🕒 **Heatmaps**: Visualize device activity patterns (Hour of Day vs Day of Week).
+- 🏘️ **MAC Grouping**: Consolidate queries by MAC address to unify devices with rotating IP addresses.
+- 📅 **Quick Filters**: One-click date presets (1D, 1W, 1M, 3M, 1Y, All Time).
+- 🔄 **Unbound Health**: Real-time resolver metrics (Cache Hit Rate, Recursion Time, Uptime) via `unbound-control`.
 - 🔍 Filter queries by client.
 - 🌐 View any number of top blocked/allowed domains, top clients.
 - 📅 Analyze queries and compute stats over a custom date range and visualize them.
@@ -240,8 +244,11 @@ You can configure the application using command-line arguments or environment va
 | `--days`         | `PIHOLE_LT_STATS_DAYS`       | `31`           | Number of days back from today to analyze.          |
 | `--port`         | `PIHOLE_LT_STATS_PORT`       | `9292`          | Port number to serve the Dash app on.            |
 | `--n_clients`         | `PIHOLE_LT_STATS_NCLIENTS`       | `10`          | Number of top clients to show in top clients plots.            |
-| `--n_domains`         | `PIHOLE_LT_STATS_NDOMAINS`       | `10`          | Number of top clients to show in top clients plots.            |
-| `--port`         | `PIHOLE_LT_STATS_TIMEZONE`       | `UTC`          | Timezone for displaying times in the dashboard.            |
+| `--n_domains`         | `PIHOLE_LT_STATS_NDOMAINS`       | `10`          | Number of top domains to show in top domains plots.            |
+| `--timezone`         | `PIHOLE_LT_STATS_TIMEZONE`       | `UTC`          | Timezone for displaying times in the dashboard.            |
+| `--hostname-display` | `PIHOLE_LT_STATS_HOSTNAME_DISPLAY` | `hostname`      | Display mode for clients: `hostname`, `ip`, or `both`. |
+| `--group-by-mac` | `PIHOLE_LT_STATS_GROUP_BY_MAC` | `False`         | Unify clients by their MAC address from the Pi-hole network table. |
+| `--unbound-control-cmd` | `PIHOLE_LT_STATS_UNBOUND_CMD` | `unbound-control`| Command prefix for Unbound (e.g., `sudo unbound-control`). |
 | `--ignore-domains` | `PIHOLE_LT_STATS_IGNORE_DOMAINS` | `""` | Comma-separated regex patterns to exclude domains from from stats (e.g to exlcude all .local domains, use ".*\.local") |
 
 ## 🧑‍💻 Contributing
@@ -282,6 +289,11 @@ Any contribution, feature ideas or bug fixes are always welcome.
 | Slowest Responding Domain | The domain with the highest average response time. |
 | Average Time Between Blocked Queries | Average interval between consecutive blocked queries. |
 | Average Time Between Allowed Queries | Average interval between consecutive allowed queries. |
+| Newest Device | The device most recently added to the Pi-hole network. |
+| Most Active (Lifetime) | The device with the highest total query count in the network table. |
+| Unbound Cache Hit Rate | Real-time percentage of queries served from Unbound's cache. |
+| Unbound Recursion Time | Average latency for recursive lookups performed by Unbound. |
+| Unbound Uptime | Duration since the Unbound service was last restarted. |
 
 
 ## 📄 License

@@ -215,7 +215,7 @@ def categorize_dns_server(forward):
         return forward  # Return as-is for unknown servers
 
 
-def get_timestamp_range(days, start_date, end_date, timezone):
+def get_timestamp_range(days, start_date, end_date, timezone, min_date_available=None):
 
     try:
         tz = ZoneInfo(timezone)
@@ -236,6 +236,10 @@ def get_timestamp_range(days, start_date, end_date, timezone):
 
         start_dt = start_dt.replace(tzinfo=tz)
         end_dt = end_dt.replace(tzinfo=tz)
+    elif days == -1 and min_date_available is not None:
+        logging.info(f"All Time selected. Using oldest available record: {min_date_available}")
+        start_dt = min_date_available
+        end_dt = datetime.now(tz)
     else:
         # otherwise use default day given by days (or args.days)
         logging.info(
@@ -258,6 +262,45 @@ def get_timestamp_range(days, start_date, end_date, timezone):
     return start_timestamp, end_timestamp
 
 
+def load_device_activity(db_path):
+    """Load device activity metrics from the network table
+    
+    Returns a dictionary mapping MAC addresses to activity metadata.
+    """
+    conn = connect_to_sql(db_path)
+    cursor = conn.cursor()
+    
+    device_activity = {}
+    
+    try:
+        # Query metrics from network table
+        query = """
+        SELECT hwaddr, firstSeen, lastQuery, numQueries, macVendor
+        FROM network
+        WHERE hwaddr IS NOT NULL AND hwaddr != ''
+        """
+        cursor.execute(query)
+        
+        for row in cursor.fetchall():
+            mac = row[0].lower()
+            device_activity[mac] = {
+                "first_seen": datetime.fromtimestamp(row[1], tz=ZoneInfo("UTC")) if row[1] else None,
+                "last_query": datetime.fromtimestamp(row[2], tz=ZoneInfo("UTC")) if row[2] else None,
+                "lifetime_queries": row[3],
+                "vendor": row[4] if row[4] else "Unknown"
+            }
+            
+        logging.info(f"Loaded activity metrics for {len(device_activity)} devices from network table")
+        
+    except Exception as e:
+        logging.warning(f"Could not load device activity: {e}")
+    
+    finally:
+        conn.close()
+        
+    return device_activity
+
+
 def read_pihole_ftl_db(
     db_paths,
     days=31,
@@ -265,11 +308,12 @@ def read_pihole_ftl_db(
     end_date=None,
     chunksize=None,
     timezone="UTC",
+    min_date_available=None,
 ):
     """Read the PiHole FTL database"""
 
     start_timestamp, end_timestamp = get_timestamp_range(
-        days, start_date, end_date, timezone
+        days, start_date, end_date, timezone, min_date_available
     )
 
     logging.info(

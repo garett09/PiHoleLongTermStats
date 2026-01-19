@@ -438,3 +438,88 @@ def generate_unbound_usage_over_time(callback_data, client=None):
     fig.update_layout(legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5))
     
     return fig
+
+
+def generate_device_activity_heatmap(callback_data, client=None):
+    """Generate a heatmap of device activity (Hour of Day vs Day of Week)"""
+    df = callback_data["hourly_agg"]
+    
+    if client is not None:
+        df = df[df["client"] == client]
+
+    if df.empty:
+        return px.imshow([[0]], title="No Activity Data for Heatmap")
+
+    # Extract hour and day name from timestamp
+    df = df.copy()
+    df["hour"] = df["timestamp"].dt.hour
+    df["day_name"] = df["timestamp"].dt.day_name()
+    
+    # Define day order
+    day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+    # Aggregate by hour and day
+    heatmap_df = df.pivot_table(
+        index="day_name", 
+        columns="hour", 
+        values="count", 
+        aggfunc="sum",
+        fill_value=0
+    )
+    
+    # Reindex to ensure all hours (0-23) and days are present in order
+    heatmap_df = heatmap_df.reindex(index=day_order, columns=range(24), fill_value=0)
+
+    fig = px.imshow(
+        heatmap_df,
+        labels=dict(x="Hour of Day", y="Day of Week", color="Queries"),
+        x=heatmap_df.columns,
+        y=heatmap_df.index,
+        title="Device Activity Pattern" + (f" for {client}" if client else ""),
+        color_continuous_scale="Viridis",
+        template="plotly_white"
+    )
+    
+    return fig
+
+
+def generate_unbound_performance_chart(unbound_stats):
+    """
+    Generate a pie chart showing Unbound cache performance (hits vs misses).
+    """
+    if not unbound_stats:
+        fig = px.pie(title="Unbound Cache Performance (Not Available)")
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        return fig
+
+    hits = unbound_stats.get("total.num.cachehits", 0)
+    misses = unbound_stats.get("total.num.cachemiss", 0)
+
+    df = pd.DataFrame({"Type": ["Cache Hits", "Cache Misses"], "Count": [hits, misses]})
+
+    fig = px.pie(
+        df,
+        values="Count",
+        names="Type",
+        title=f"Unbound Cache ({unbound_stats.get('cache_hit_rate', 0):.1f}% Hit Rate)",
+        color_discrete_map={"Cache Hits": "#10b981", "Cache Misses": "#ef4444"},
+        hole=0.4,
+    )
+
+    fig.update_layout(
+        template="plotly_white",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=0, r=0, t=50, b=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        font=dict(color="#2c3e50"),
+        title=dict(x=0.5, xanchor="center"),
+    )
+
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+
+    return fig

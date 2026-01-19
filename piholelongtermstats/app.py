@@ -731,6 +731,92 @@ def serve_layout(
                 className="kpi-container",
             ),
             html.Br(),
+            # DNS Analytics Section - Horizontal Card Layout
+            html.H2("DNS Server Analytics"),
+            html.H5("Upstream DNS server distribution and query type analysis"),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.H3("Cache Hit Rate"),
+                            html.P(f"{stats.get('cache_hit_rate', 0):.2f}%"),
+                            html.P(
+                                f"{stats.get('dns_cached_blocked_count', 0):,} cached/blocked queries",
+                                style={"fontSize": "14px", "color": "#777"},
+                            ),
+                        ],
+                        className="carddns",
+                    ),
+                    html.Div(
+                        [
+                            html.H3("Primary Upstream DNS"),
+                            html.P(f"{stats.get('primary_upstream', 'N/A')}"),
+                            html.P(
+                                f"{stats.get('unbound_ipv4_pct', 0):.1f}% IPv4 / {stats.get('unbound_ipv6_pct', 0):.1f}% IPv6",
+                                style={"fontSize": "14px", "color": "#777"},
+                            ),
+                        ],
+                        className="carddns",
+                    ),
+                    html.Div(
+                        [
+                            html.H3("Unbound IPv4"),
+                            html.P(f"{stats.get('dns_unbound_ipv4_count', 0):,} queries"),
+                            html.P(
+                                f"{stats.get('dns_unbound_ipv4_pct', 0):.2f}% of total | Avg: {stats.get('unbound_ipv4_latency', 0):.1f}ms",
+                                style={"fontSize": "14px", "color": "#777"},
+                            ),
+                        ],
+                        className="carddns",
+                    ),
+                    html.Div(
+                        [
+                            html.H3("Unbound IPv6"),
+                            html.P(f"{stats.get('dns_unbound_ipv6_count', 0):,} queries"),
+                            html.P(
+                                f"{stats.get('dns_unbound_ipv6_pct', 0):.2f}% of total | Avg: {stats.get('unbound_ipv6_latency', 0):.1f}ms",
+                                style={"fontSize": "14px", "color": "#777"},
+                            ),
+                        ],
+                        className="carddns",
+                    ),
+                    html.Div(
+                        [
+                            html.H3("Router Fallback"),
+                            html.P(f"{stats.get('router_fallback_rate', 0):.2f}%"),
+                            html.P(
+                                f"{stats.get('dns_router_count', 0):,} queries via router",
+                                style={"fontSize": "14px", "color": "#777"},
+                            ),
+                        ],
+                        className="carddns",
+                    ),
+                    html.Div(
+                        [
+                            html.H3("Query Type: IPv6 vs IPv4"),
+                            html.P(f"{stats.get('ipv6_adoption', 0):.1f}% IPv6"),
+                            html.P(
+                                f"AAAA records: {stats.get('ipv6_query_pct', 0):.1f}% | A records: {stats.get('ipv4_query_pct', 0):.1f}%",
+                                style={"fontSize": "14px", "color": "#777"},
+                            ),
+                        ],
+                        className="carddns",
+                    ),
+                    html.Div(
+                        [
+                            html.H3("Top Query Type"),
+                            html.P(f"{stats.get('top_query_type', 'N/A')}"),
+                            html.P(
+                                f"{stats.get('top_query_type_count', 0):,} queries",
+                                style={"fontSize": "14px", "color": "#777"},
+                            ),
+                        ],
+                        className="carddns",
+                    ),
+                ],
+                className="kpi-container",
+            ),
+            html.Br(),
             html.Div(
                 [
                     html.H2("Queries over time"),

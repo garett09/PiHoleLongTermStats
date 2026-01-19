@@ -33,6 +33,9 @@ from piholelongtermstats.plot import (
     generate_plot_data,
     generate_client_activity_over_time,
     generate_queries_over_time,
+    generate_dns_server_pie,
+    generate_query_type_pie,
+    generate_unbound_usage_over_time,
 )
 
 __version__ = "0.2.1"
@@ -223,6 +226,8 @@ def serve_layout(
     callback_data = {
         "hourly_agg": hourly_data["hourly_agg"],
         "top_clients": hourly_data["top_clients"],
+        "unbound_trend_agg": hourly_data["unbound_trend_agg"],
+        "query_type_trend_agg": hourly_data["query_type_trend_agg"],
         "data_span_days": plot_data["data_span_days"],
     }
 
@@ -238,6 +243,9 @@ def serve_layout(
     initial_activity_fig = generate_client_activity_over_time(
         callback_data=callback_data, n_clients=args.n_clients, client=None
     )
+    initial_dns_pie_fig = generate_dns_server_pie(callback_data=callback_data)
+    initial_query_type_fig = generate_query_type_pie(callback_data=callback_data)
+    initial_unbound_trend_fig = generate_unbound_usage_over_time(callback_data=callback_data)
 
     layout = html.Div(
         [
@@ -817,6 +825,31 @@ def serve_layout(
                 className="kpi-container",
             ),
             html.Br(),
+            # DNS Analytics Charts
+            html.Div(
+                [
+                    html.Div(
+                        [dcc.Graph(id="dns-server-pie", figure=initial_dns_pie_fig)],
+                        className="cardplot",
+                    ),
+                    html.Div(
+                        [dcc.Graph(id="query-type-pie", figure=initial_query_type_fig)],
+                        className="cardplot",
+                    ),
+                ],
+                className="row",
+            ),
+            html.Br(),
+            html.Div(
+                [
+                    html.Div(
+                        [dcc.Graph(id="unbound-trend-view", figure=initial_unbound_trend_fig)],
+                        className="cardplot",
+                    ),
+                ],
+                className="row",
+            ),
+            html.Br(),
             html.Div(
                 [
                     html.H2("Queries over time"),
@@ -1244,6 +1277,31 @@ def update_client_activity(client, n_clicks):
     )
 
     return fig
+
+
+@app.callback(
+    Output("dns-server-pie", "figure"),
+    Output("query-type-pie", "figure"),
+    Output("unbound-trend-view", "figure"),
+    Input("client-filter", "value"),
+    Input("reload-button", "n_clicks"),
+    prevent_initial_call=True,
+)
+def update_dns_analytics(client, n_clicks):
+    logging.info(f"Updating DNS analytics charts for client: {client}")
+    global PHLTS_CALLBACK_DATA
+
+    dns_pie = generate_dns_server_pie(
+        callback_data=PHLTS_CALLBACK_DATA, client=client
+    )
+    query_pie = generate_query_type_pie(
+        callback_data=PHLTS_CALLBACK_DATA, client=client
+    )
+    unbound_trend = generate_unbound_usage_over_time(
+        callback_data=PHLTS_CALLBACK_DATA, client=client
+    )
+
+    return dns_pie, query_pie, unbound_trend
 
 
 def run():

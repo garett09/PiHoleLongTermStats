@@ -262,8 +262,8 @@ def serve_layout(
     # compute stats
     stats = compute_stats(
         df, 
-        max_date_available, 
         min_date_available,
+        max_date_available, 
         device_activity=device_activity,
         ip_to_mac=ip_to_mac,
         mac_to_name=mac_to_name

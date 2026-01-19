@@ -275,6 +275,38 @@ h3 {
     transform: translateY(-5px);
 }
 
+.carddns {
+    background: linear-gradient(135deg, #ffffff, #f0f8ff);
+    border-radius: 15px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+    padding: 20px;
+    transition: transform 0.2s ease-in-out;
+    border-left: 5px solid #3498db;
+}
+
+.carddns h3 {
+    margin-top: 0;
+    font-size: 18px;
+    color: #555555;
+}
+
+.carddns p {
+    font-size: 24px;
+    font-weight: bold;
+    margin: 10px 0 0;
+}
+
+.carddns p:last-of-type {
+    font-size: 14px;
+    font-weight: normal;
+    color: #777777;
+    margin-top: 5px;
+}
+
+.carddns:hover {
+    transform: translateY(-5px);
+}
+
 .reload-container {
     display: flex;
     justify-content: center;

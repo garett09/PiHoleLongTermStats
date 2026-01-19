@@ -143,9 +143,14 @@ def categorize_dns_server(forward):
     Returns:
         Category name for the DNS server
     """
-    if forward is None:
+    # Handle NaN, None, or non-string values
+    if forward is None or (isinstance(forward, float) and pd.isna(forward)):
         return "Cached/Blocked"
-    elif "127.0.0.1#5335" in forward:
+    
+    # Convert to string to be safe
+    forward = str(forward)
+    
+    if "127.0.0.1#5335" in forward:
         return "Unbound IPv4"
     elif "::1#5335" in forward:
         return "Unbound IPv6"

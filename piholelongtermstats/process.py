@@ -27,44 +27,53 @@ def regex_ignore_domains(df, pattern):
         return df
 
 
-def resolve_hostnames(df, hostname_map, display_mode="hostname"):
-    """Resolve IP addresses to hostnames based on the hostname mapping
+def resolve_hostnames(df, hostname_map, display_mode="hostname", group_by_mac=False, ip_to_mac=None, mac_to_name=None):
+    """Resolve IP addresses to hostnames or MAC-based device names
     
     Args:
         df: DataFrame with 'client' column containing IP addresses
         hostname_map: Dictionary mapping IP addresses to hostnames
-        display_mode: How to display client information
-            - 'hostname': Show hostname (fallback to IP if not available)
-            - 'ip': Show IP address only
-            - 'both': Show "Hostname (IP)" format
+        display_mode: How to display client information ('hostname', 'ip', 'both')
+        group_by_mac: Whether to group multiple IPs by their MAC address
+        ip_to_mac: Dict mapping IP to MAC address
+        mac_to_name: Dict mapping MAC to Hostname
     
     Returns:
         DataFrame with 'client' column updated to display values
         and 'client_ip' column preserving original IP addresses
     """
-    logging.info(f"Resolving hostnames with display mode: {display_mode}")
+    logging.info(f"Resolving hostnames (Mode: {display_mode}, GroupByMAC: {group_by_mac})")
     
-    # Preserve original IP addresses in client_ip column
+    # Preserve original IP addresses
     df["client_ip"] = df["client"]
     
-    if display_mode == "ip":
-        # Keep IP addresses as-is (no changes needed)
-        logging.info("Using IP addresses for client display")
+    if group_by_mac and ip_to_mac and mac_to_name:
+        logging.info("Grouping clients by MAC address...")
+        
+        def mac_resolver(ip):
+            mac = ip_to_mac.get(ip)
+            if mac:
+                # Use MAC-associated name if available, else use MAC address itself
+                return mac_to_name.get(mac, f"Device [{mac}]")
+            # Fallback to hostname map if MAC not found for this IP
+            return hostname_map.get(ip, ip)
+            
+        df["client"] = df["client"].apply(mac_resolver)
+        
+    elif display_mode == "ip":
+        logging.info("Using raw IP addresses for client display")
+        # No changes needed to 'client' column
     elif display_mode == "both":
-        # Show "Hostname (IP)" or just "IP" if no hostname
         df["client"] = df["client"].apply(
             lambda ip: f"{hostname_map[ip]} ({ip})" if ip in hostname_map else ip
         )
-        logging.info("Using 'Hostname (IP)' format for client display")
-    else:  # hostname mode (default)
-        # Show hostname if available, otherwise show IP
+    else:  # hostname mode
         df["client"] = df["client"].apply(
             lambda ip: hostname_map.get(ip, ip)
         )
-        hostnames_resolved = df["client"].ne(df["client_ip"]).sum()
-        logging.info(
-            f"Resolved {hostnames_resolved} out of {len(df)} queries to hostnames"
-        )
+        
+    hostnames_resolved = df["client"].ne(df["client_ip"]).sum()
+    logging.info(f"Resolved {hostnames_resolved} out of {len(df)} queries to unique device names")
     
     return df
 

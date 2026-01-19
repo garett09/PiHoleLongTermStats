@@ -17,6 +17,7 @@ from piholelongtermstats.db import (
     connect_to_sql,
     probe_sample_df,
     load_hostname_mapping,
+    load_client_mac_mapping,
     load_forwarder_mapping,
     categorize_dns_server,
 )

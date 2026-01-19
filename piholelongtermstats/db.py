@@ -98,6 +98,63 @@ def load_hostname_mapping(db_path):
     return hostname_map
 
 
+def load_forwarder_mapping(db_path):
+    """Load DNS forwarder/server mapping from forward_by_id table
+    
+    Returns a dictionary mapping forwarder IDs to DNS server addresses.
+    """
+    conn = connect_to_sql(db_path)
+    cursor = conn.cursor()
+    
+    try:
+        # Query to get forwarder ID to DNS server mapping
+        query = """
+        SELECT id, forward 
+        FROM forward_by_id
+        """
+        cursor.execute(query)
+        
+        # Create mapping dictionary
+        forwarder_map = {}
+        for row in cursor.fetchall():
+            forwarder_id = row[0]
+            dns_server = row[1]
+            forwarder_map[forwarder_id] = dns_server
+        
+        logging.info(f"Loaded {len(forwarder_map)} DNS forwarder mappings from forward_by_id table")
+        
+    except Exception as e:
+        logging.warning(f"Could not load forwarder mapping: {e}")
+        logging.warning("DNS server analytics will not be available.")
+        forwarder_map = {}
+    
+    finally:
+        conn.close()
+    
+    return forwarder_map
+
+
+def categorize_dns_server(forward):
+    """Categorize DNS servers for better grouping and display
+    
+    Args:
+        forward: DNS server address (e.g., '127.0.0.1#5335', '::1#5335')
+    
+    Returns:
+        Category name for the DNS server
+    """
+    if forward is None:
+        return "Cached/Blocked"
+    elif "127.0.0.1#5335" in forward:
+        return "Unbound IPv4"
+    elif "::1#5335" in forward:
+        return "Unbound IPv6"
+    elif "192.168.50.1" in forward or "fe80::ce28:aaff:fe29:f650" in forward:
+        return "Router"
+    else:
+        return forward  # Return as-is for unknown servers
+
+
 def get_timestamp_range(days, start_date, end_date, timezone):
 
     try:
@@ -160,7 +217,7 @@ def read_pihole_ftl_db(
     )
 
     query = f"""
-    SELECT qs.id, qs.timestamp, qs.type, qs.status, d.domain, c.ip as client, qs.reply_time
+    SELECT qs.id, qs.timestamp, qs.type, qs.status, d.domain, c.ip as client, qs.reply_time, qs.forward
     FROM query_storage qs
     JOIN client_by_id c ON qs.client = c.id
     JOIN domain_by_id d ON qs.domain = d.id

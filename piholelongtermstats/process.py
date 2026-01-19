@@ -108,6 +108,75 @@ def preprocess_df(df, timezone="UTC"):
     return df
 
 
+def process_dns_servers(df, forwarder_map, categorize_func):
+    """Process DNS server information and add categorized column
+    
+    Args:
+        df: DataFrame with 'forward' column containing forwarder IDs
+        forwarder_map: Dictionary mapping forwarder IDs to DNS server addresses
+        categorize_func: Function to categorize DNS servers
+    
+    Returns:
+        DataFrame with 'dns_server' and 'dns_category' columns
+    """
+    logging.info("Processing DNS server information...")
+    
+    # Map forwarder IDs to DNS server addresses
+    df["dns_server"] = df["forward"].map(forwarder_map)
+    
+    # Categorize DNS servers for better grouping
+    df["dns_category"] = df["dns_server"].apply(categorize_func)
+    
+    logging.info("DNS server information processed.")
+    return df
+
+
+# Query type mapping based on DNS record types
+QUERY_TYPES = {
+    1: "A (IPv4)",
+    2: "AAAA (IPv6)",
+    5: "CNAME",
+    6: "SOA",
+    12: "PTR",
+    15: "MX",
+    16: "TXT",
+    28: "AAAA (IPv6)",
+    33: "SRV",
+    35: "NAPTR",
+    39: "DNAME",
+    43: "DS",
+    46: "RRSIG",
+    47: "NSEC",
+    48: "DNSKEY",
+    50: "NSEC3",
+    51: "NSEC3PARAM",
+    52: "TLSA",
+    257: "CAA",
+}
+
+
+def add_query_type_info(df):
+    """Add human-readable query type information
+    
+    Args:
+        df: DataFrame with 'type' column containing query type IDs
+    
+    Returns:
+        DataFrame with 'query_type' column
+    """
+    logging.info("Adding query type information...")
+    
+    df["query_type"] = df["type"].map(QUERY_TYPES).fillna("Other")
+    
+    # Add IPv4/IPv6 classification
+    df["ip_version"] = df["type"].apply(
+        lambda x: "IPv6" if x in [2, 28] else ("IPv4" if x == 1 else "Other")
+    )
+    
+    logging.info("Query type information added.")
+    return df
+
+
 def prepare_hourly_aggregated_data(df, n_clients):
     """Pre-aggregate data by hour"""
     logging.info("Pre-aggregating data by hour for callbacks...")

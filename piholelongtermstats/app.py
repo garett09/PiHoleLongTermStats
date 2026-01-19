@@ -12,12 +12,21 @@ import pandas as pd
 from dash import Dash, dcc, html, Input, Output, State
 from zoneinfo import ZoneInfo
 
-from piholelongtermstats.db import read_pihole_ftl_db, connect_to_sql, probe_sample_df, load_hostname_mapping
+from piholelongtermstats.db import (
+    read_pihole_ftl_db,
+    connect_to_sql,
+    probe_sample_df,
+    load_hostname_mapping,
+    load_forwarder_mapping,
+    categorize_dns_server,
+)
 from piholelongtermstats.process import (
     regex_ignore_domains,
     preprocess_df,
     prepare_hourly_aggregated_data,
     resolve_hostnames,
+    process_dns_servers,
+    add_query_type_info,
 )
 from piholelongtermstats.stats import compute_stats
 from piholelongtermstats.plot import (
@@ -194,6 +203,13 @@ def serve_layout(
     
     # Resolve hostnames based on display mode
     df = resolve_hostnames(df, hostname_map, display_mode=hostname_display)
+
+    # Load DNS forwarder mapping and process DNS server information
+    forwarder_map = load_forwarder_mapping(db_paths[0])
+    df = process_dns_servers(df, forwarder_map, categorize_dns_server)
+    
+    # Add query type information
+    df = add_query_type_info(df)
 
     # compute the stats
     stats = compute_stats(df, min_date_available, max_date_available)

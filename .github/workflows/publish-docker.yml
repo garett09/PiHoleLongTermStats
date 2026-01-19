@@ -3,6 +3,7 @@ name: Publish docker image for PiHoleLongTermStats
 on:
   release:
     types: [published]
+  workflow_dispatch:  # Allows manual trigger from GitHub Actions tab
     
 jobs:
   docker:

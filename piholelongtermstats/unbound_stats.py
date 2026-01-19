@@ -54,8 +54,9 @@ def get_unbound_stats(command_prefix=["unbound-control"]):
         logging.warning("unbound-control command not found. Skipping Unbound real-time stats.")
         return None
     except subprocess.CalledProcessError as e:
-        logging.warning(f"Error calling unbound-control: {e}. Skipping Unbound real-time stats.")
+        stderr_msg = e.stderr.strip() if e.stderr else "No error message"
+        logging.warning(f"Error calling unbound-control: {stderr_msg} (Exit code: {e.returncode}). Skipping Unbound real-time stats.")
         return None
     except Exception as e:
-        logging.error(f"Unexpected error fetching Unbound stats: {e}")
+        logging.error(f"Unexpected error fetching Unbound stats: {str(e)}")
         return None

@@ -1,19 +1,20 @@
 services:
   pihole-long-term-stats:
-    image: ghcr.io/davistdaniel/piholelongtermstats:latest
+    build: .
+    image: piholelongtermstats:local
     container_name: pihole-lt-stats
     ports:
       - "9292:9292"  # Map host port to container port
     volumes:
       - ./pihole-FTL.db:/app/pihole-FTL.db:ro  # Path to your Pi-hole DB file (adjust if it's not in current directory)
+      - /run/unbound.ctl:/run/unbound.ctl:ro   # Mount the Unbound control socket
       # To include additional Pi-hole databases, mount each one similarly:
       #- ./pihole-FTL-2.db:/app/pihole-FTL-2.db:ro
     environment:
       - PIHOLE_LT_STATS_DB_PATH=/app/pihole-FTL.db  # Path inside the container to the mounted DB file
       
-      # Provide multiple databases by listing their container paths as a
-      # comma-separated string, e.g.:
-      #- PIHOLE_LT_STATS_DB_PATH=/app/pihole-FTL.db,/app/pihole-FTL-2.db
+      # Optional: Connect to Unbound on a specific IP/Host (default uses socket from config if not set)
+      #- PIHOLE_LT_STATS_UNBOUND_SERVER=127.0.0.1
 
       - PIHOLE_LT_STATS_DAYS=31                     # Number of days from now of data to analyze; change if desired
       - PIHOLE_LT_STATS_PORT=9292                   # Port the app listens to inside container; keep in sync with ports mapping

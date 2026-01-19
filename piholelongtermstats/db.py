@@ -96,6 +96,61 @@ def load_hostname_mapping(db_path):
         conn.close()
     
     return hostname_map
+def load_client_mac_mapping(db_path):
+    """Load IP-to-MAC and MAC-to-Hostname mapping from network table
+    
+    Returns:
+        ip_to_mac: dict mapping IP addresses to MAC addresses
+        mac_to_name: dict mapping MAC addresses to the best available hostname
+    """
+    conn = connect_to_sql(db_path)
+    cursor = conn.cursor()
+    
+    ip_to_mac = {}
+    mac_to_name = {}
+    
+    try:
+        # 1. Get IP to MAC mapping
+        # network_addresses links IPs to network_id (which has the MAC)
+        query_ips = """
+        SELECT na.ip, n.hwaddr
+        FROM network_addresses na
+        JOIN network n ON na.network_id = n.id
+        WHERE n.hwaddr IS NOT NULL AND n.hwaddr != ''
+        """
+        cursor.execute(query_ips)
+        for ip, mac in cursor.fetchall():
+            ip_to_mac[ip] = mac.lower()
+
+        # 2. Get MAC to Hostname mapping
+        # We prefer names from network_addresses, then from network table itself if available
+        # This query gets all unique MAC/Name pairs, filtered for non-empty names
+        query_names = """
+        SELECT n.hwaddr, na.name
+        FROM network_addresses na
+        JOIN network n ON na.network_id = n.id
+        WHERE na.name IS NOT NULL AND na.name != ''
+        """
+        cursor.execute(query_names)
+        for mac, name in cursor.fetchall():
+            m = mac.lower()
+            # If we don't have a name yet for this MAC, or the current one is an IP (failsafe)
+            if m not in mac_to_name:
+                mac_to_name[m] = name
+            # Note: We could implement more complex logic to pick the "best" hostname 
+            # if multiple IPs for one MAC have different hostnames.
+            
+        logging.info(f"Loaded {len(ip_to_mac)} IP-to-MAC mappings and {len(mac_to_name)} MAC-to-Hostname mappings")
+        
+    except Exception as e:
+        logging.warning(f"Could not load MAC mapping: {e}")
+        
+    finally:
+        conn.close()
+        
+    return ip_to_mac, mac_to_name
+
+
 
 
 def load_forwarder_mapping(db_path):

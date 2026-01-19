@@ -382,6 +382,92 @@ def _reply_time_stats(stats, df):
     return stats
 
 
+def _dns_server_stats(stats, df):
+    """
+    Compute DNS server analytics including upstream server distribution
+    and IPv4 vs IPv6 Unbound usage
+    """
+    # Overall DNS server distribution
+    dns_distribution = df["dns_category"].value_counts()
+    total_queries = len(df)
+    
+    for category, count in dns_distribution.items():
+        pct = (count / total_queries) * 100
+        stats[f"dns_{category.lower().replace('/', '_').replace(' ', '_')}_count"] = count
+        stats[f"dns_{category.lower().replace('/', '_').replace(' ', '_')}_pct"] = pct
+    
+    # Cache hit rate (Cached/Blocked queries)
+    cached_count = dns_distribution.get("Cached/Blocked", 0)
+    stats["cache_hit_rate"] = (cached_count / total_queries) * 100 if total_queries > 0 else 0
+    
+    # Unbound IPv4 vs IPv6 breakdown
+    unbound_ipv4_count = dns_distribution.get("Unbound IPv4", 0)
+    unbound_ipv6_count = dns_distribution.get("Unbound IPv6", 0)
+    unbound_total = unbound_ipv4_count + unbound_ipv6_count
+    
+    if unbound_total > 0:
+        stats["unbound_ipv4_pct"] = (unbound_ipv4_count / unbound_total) * 100
+        stats["unbound_ipv6_pct"] = (unbound_ipv6_count / unbound_total) * 100
+        stats["primary_upstream"] = "Unbound IPv4" if unbound_ipv4_count > unbound_ipv6_count else "Unbound IPv6"
+    else:
+        stats["unbound_ipv4_pct"] = 0
+        stats["unbound_ipv6_pct"] = 0
+        stats["primary_upstream"] = "N/A"
+    
+    # Router fallback rate
+    router_count = dns_distribution.get("Router", 0)
+    stats["router_fallback_rate"] = (router_count / total_queries) * 100 if total_queries > 0 else 0
+    
+    # DNS server latency comparison
+    unbound_ipv4_df = df[df["dns_category"] == "Unbound IPv4"]
+    unbound_ipv6_df = df[df["dns_category"] == "Unbound IPv6"]
+    
+    if len(unbound_ipv4_df) > 0:
+        stats["unbound_ipv4_latency"] = unbound_ipv4_df["reply_time"].mean() * 1000  # Convert to ms
+    else:
+        stats["unbound_ipv4_latency"] = 0
+    
+    if len(unbound_ipv6_df) > 0:
+        stats["unbound_ipv6_latency"] = unbound_ipv6_df["reply_time"].mean() * 1000  # Convert to ms
+    else:
+        stats["unbound_ipv6_latency"] = 0
+    
+    logging.info("Computed DNS server analytics stats.")
+    return stats
+
+
+def _query_type_stats(stats, df):
+    """
+    Compute query type distribution and IPv4 vs IPv6 query analysis
+    """
+    # Query type distribution
+    query_type_distribution = df["query_type"].value_counts()
+    total_queries = len(df)
+    
+    # Top query types
+    top_query_types = query_type_distribution.head(5)
+    stats["top_query_type"] = top_query_types.index[0] if len(top_query_types) > 0 else "N/A"
+    stats["top_query_type_count"] = top_query_types.iloc[0] if len(top_query_types) > 0 else 0
+    
+    # IPv4 vs IPv6 query analysis
+    ip_version_distribution = df["ip_version"].value_counts()
+    ipv4_count = ip_version_distribution.get("IPv4", 0)
+    ipv6_count = ip_version_distribution.get("IPv6", 0)
+    ip_total = ipv4_count + ipv6_count
+    
+    if ip_total > 0:
+        stats["ipv4_query_pct"] = (ipv4_count / ip_total) * 100
+        stats["ipv6_query_pct"] = (ipv6_count / ip_total) * 100
+        stats["ipv6_adoption"] = stats["ipv6_query_pct"]
+    else:
+        stats["ipv4_query_pct"] = 0
+        stats["ipv6_query_pct"] = 0
+        stats["ipv6_adoption"] = 0
+    
+    logging.info("Computed query type analytics stats.")
+    return stats
+
+
 def compute_stats(df, min_date_available, max_date_available):
     """Compute all statistics and return them as a dictionary"""
 
@@ -413,6 +499,12 @@ def compute_stats(df, min_date_available, max_date_available):
 
     # reply time stats
     stats = _reply_time_stats(stats, df)
+
+    # DNS server analytics
+    stats = _dns_server_stats(stats, df)
+    
+    # Query type analytics
+    stats = _query_type_stats(stats, df)
 
     df_sorted = df.sort_values("timestamp").copy()
     df_sorted["is_blocked"] = df_sorted["status_type"] == "Blocked"

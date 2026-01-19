@@ -62,15 +62,31 @@ def generate_plot_data(df, n_clients, n_domains):
 
     logging.info("Generated plot data for allowed and blocked domains.")
 
-    # plot data for reply time over days
-    reply_time_df = (
-        df.groupby("date")["reply_time"]
-        .mean()
-        .mul(1000)
-        .reset_index(name="reply_time_ms")
-    )
+    # plot data for reply time
+    # Smart Aggregation: If data spans 3 days or less, show Hourly averages. Otherwise, Daily.
+    time_diff = df["timestamp"].max() - df["timestamp"].min()
+    data_span_days = time_diff.days
+    
+    if data_span_days <= 3:
+        granularity = "Hourly"
+        reply_time_df = (
+            df.groupby(pd.Grouper(key="timestamp", freq="h"))["reply_time"]
+            .mean()
+            .mul(1000)
+            .reset_index(name="reply_time_ms")
+        )
+        # Rename timestamp to date for consistency with app.py's expected column name
+        reply_time_df.rename(columns={"timestamp": "date"}, inplace=True)
+    else:
+        granularity = "Daily"
+        reply_time_df = (
+            df.groupby("date")["reply_time"]
+            .mean()
+            .mul(1000)
+            .reset_index(name="reply_time_ms")
+        )
 
-    logging.info("Generated plot data for reply time plot")
+    logging.info(f"Generated plot data for reply time plot ({granularity})")
     client_list = df["client"].unique().tolist()
 
     # plot data for doman-client scatter. take minimum from n_domains or n_clients

@@ -2,13 +2,16 @@ import subprocess
 import logging
 import re
 
-def get_unbound_stats(command_prefix=["unbound-control"]):
+def get_unbound_stats(command_prefix=["unbound-control"], server=None):
     """
     Executes 'unbound-control stats_noreset' and parses the output into a dictionary.
     Returns a dictionary of stats or None if it fails.
     """
     try:
-        cmd = list(command_prefix) + ["stats_noreset"]
+        cmd = list(command_prefix)
+        if server:
+            cmd += ["-s", server]
+        cmd += ["stats_noreset"]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         stats_output = result.stdout
         

@@ -128,6 +128,13 @@ parser.add_argument(
     help="Command prefix for unbound-control. Useful for 'sudo unbound-control'. Default: unbound-control. Env: PIHOLE_LT_STATS_UNBOUND_CMD",
 )
 
+parser.add_argument(
+    "--unbound-server",
+    type=str,
+    default=os.getenv("PIHOLE_LT_STATS_UNBOUND_SERVER", None),
+    help="Address of the Unbound server (e.g., '127.0.0.1' or 'unbound'). If not set, unbound-control uses the configuration file defaults (e.g., socket). Env: PIHOLE_LT_STATS_UNBOUND_SERVER",
+)
+
 args = parser.parse_args()
 
 logging.info("Setting environment variables:")
@@ -140,6 +147,7 @@ logging.info(f"PIHOLE_LT_STATS_TIMEZONE : {args.timezone}")
 logging.info(f"PIHOLE_LT_STATS_IGNORE_DOMAINS : {args.ignore_domains}")
 logging.info(f"PIHOLE_LT_STATS_HOSTNAME_DISPLAY : {args.hostname_display}")
 logging.info(f"PIHOLE_LT_STATS_GROUP_BY_MAC : {args.group_by_mac}")
+logging.info(f"PIHOLE_LT_STATS_UNBOUND_SERVER : {args.unbound_server}")
 logging.info("Initializing PiHoleLongTermStats Dashboard")
 
 
@@ -163,7 +171,7 @@ def serve_layout(
     if unbound_stats is None:
         # Fetch Unbound real-time stats (Phase 5)
         unbound_cmd = args.unbound_control_cmd.split()
-        unbound_stats = get_unbound_stats(command_prefix=unbound_cmd)
+        unbound_stats = get_unbound_stats(command_prefix=unbound_cmd, server=args.unbound_server)
 
     if isinstance(db_path, str):
         db_paths = db_path.split(",")
@@ -1425,7 +1433,7 @@ def reload_page(n_clicks, q1, qw, qm, q3m, qy, qall, start_date, end_date):
 
     # Fetch Unbound real-time stats (Phase 5)
     unbound_cmd = args.unbound_control_cmd.split()
-    unbound_stats = get_unbound_stats(command_prefix=unbound_cmd)
+    unbound_stats = get_unbound_stats(command_prefix=unbound_cmd, server="127.0.0.1")
 
     chunksize_list, latest_ts_list, oldest_ts_list = (
         [],

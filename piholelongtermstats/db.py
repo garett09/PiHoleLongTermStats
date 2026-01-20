@@ -134,11 +134,15 @@ def load_client_mac_mapping(db_path):
         cursor.execute(query_names)
         for mac, name in cursor.fetchall():
             m = mac.lower()
-            # If we don't have a name yet for this MAC, or the current one is an IP (failsafe)
+            # If we don't have a name yet for this MAC, use the current one
             if m not in mac_to_name:
                 mac_to_name[m] = name
-            # Note: We could implement more complex logic to pick the "best" hostname 
-            # if multiple IPs for one MAC have different hostnames.
+            else:
+                # If we already have a name, but the new one starts with Uppercase and the old one doesn't,
+                # swap it out. This prefers "Apple-TV" over "apple-tv".
+                current_name = mac_to_name[m]
+                if not current_name[0].isupper() and name[0].isupper():
+                     mac_to_name[m] = name
             
         logging.info(f"Loaded {len(ip_to_mac)} IP-to-MAC mappings and {len(mac_to_name)} MAC-to-Hostname mappings")
         

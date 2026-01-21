@@ -50,27 +50,35 @@ def resolve_hostnames(df, hostname_map, display_mode="hostname", group_by_mac=Fa
     if group_by_mac and ip_to_mac and mac_to_name:
         logging.info("Grouping clients by MAC address...")
         
-        def mac_resolver(ip):
-            mac = ip_to_mac.get(ip)
-            if mac:
-                # Use MAC-associated name if available, else use MAC address itself
-                return mac_to_name.get(mac, f"Device [{mac}]")
-            # Fallback to hostname map if MAC not found for this IP
-            return hostname_map.get(ip, ip)
-            
-        df["client"] = df["client"].apply(mac_resolver)
+        # Pre-calculate IP to Name mapping for better performance
+        # instead of running logic on every row
+        ip_to_display = {}
+        
+        # 1. Add all IPs that have a MAC mapping
+        for ip, mac in ip_to_mac.items():
+            if mac in mac_to_name:
+                ip_to_display[ip] = mac_to_name[mac]
+            else:
+                ip_to_display[ip] = f"Device [{mac}]"
+                
+        # 2. Add IPs that only have hostname mapping (if not already covered)
+        for ip, hostname in hostname_map.items():
+            if ip not in ip_to_display:
+                ip_to_display[ip] = hostname
+                
+        # Optimize: vectorized map is much faster than .apply()
+        df["client"] = df["client"].map(ip_to_display).fillna(df["client"])
         
     elif display_mode == "ip":
         logging.info("Using raw IP addresses for client display")
         # No changes needed to 'client' column
     elif display_mode == "both":
-        df["client"] = df["client"].apply(
-            lambda ip: f"{hostname_map[ip]} ({ip})" if ip in hostname_map else ip
-        )
+        # Create mapping: ip -> "Hostname (ip)"
+        both_map = {ip: f"{name} ({ip})" for ip, name in hostname_map.items()}
+        df["client"] = df["client"].map(both_map).fillna(df["client"])
     else:  # hostname mode
-        df["client"] = df["client"].apply(
-            lambda ip: hostname_map.get(ip, ip)
-        )
+        # Vectorized map
+        df["client"] = df["client"].map(hostname_map).fillna(df["client"])
         
     hostnames_resolved = df["client"].ne(df["client_ip"]).sum()
     logging.info(f"Resolved {hostnames_resolved} out of {len(df)} queries to unique device names")
@@ -104,11 +112,11 @@ def preprocess_df(df, timezone="UTC"):
     logging.info("Processing allowed and blocked status codes...")
     allowed_statuses = [2, 3, 12, 13, 14, 17]
     blocked_statuses = [1, 4, 5, 6, 7, 8, 9, 10, 11, 15, 16, 18]
-    df["status_type"] = df["status"].apply(
-        lambda x: "Allowed"
-        if x in allowed_statuses
-        else ("Blocked" if x in blocked_statuses else "Other")
-    )
+    
+    # Vectorized optimization using boolean masking
+    df["status_type"] = "Other"
+    df.loc[df["status"].isin(allowed_statuses), "status_type"] = "Allowed"
+    df.loc[df["status"].isin(blocked_statuses), "status_type"] = "Blocked"
 
     df["day_name"] = df["timestamp"].dt.day_name()
     df["reply_time"] = pd.to_numeric(df["reply_time"], errors="coerce")

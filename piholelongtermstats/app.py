@@ -1328,64 +1328,84 @@ app.title = "PiHoleLongTermStats"
 if isinstance(args.db_path, str):
     db_paths = args.db_path.split(",")
 
-chunksize_list, latest_ts_list, oldest_ts_list = (
-    [],
-    [],
-    [],
-)
+# Initialize global callback data
+PHLTS_CALLBACK_DATA = None
 
-for db in db_paths:
-    conn = connect_to_sql(db)
-    chunksize, latest_ts, oldest_ts = probe_sample_df(conn)
-    chunksize_list.append(chunksize)
-    latest_ts_list.append(latest_ts.tz_convert(ZoneInfo(args.timezone)))
-    oldest_ts_list.append(oldest_ts.tz_convert(ZoneInfo(args.timezone)))
-    conn.close()
+def serve_fresh_layout():
+    """Function to load fresh data and serve the layout on every page load."""
+    logging.info("Checking for fresh data on page load...")
+    global PHLTS_CALLBACK_DATA
+    
+    chunksize_list, latest_ts_list, oldest_ts_list = (
+        [],
+        [],
+        [],
+    )
 
-logging.info(
-    f"Latest date-time from all databases : {max(latest_ts_list)} (TZ: {args.timezone})"
-)
-logging.info(
-    f"Oldest date-time from all databases : {min(oldest_ts_list)} (TZ: {args.timezone})"
-)
+    for db in db_paths:
+        conn = connect_to_sql(db)
+        chunksize, latest_ts, oldest_ts = probe_sample_df(conn)
+        chunksize_list.append(chunksize)
+        latest_ts_list.append(latest_ts.tz_convert(ZoneInfo(args.timezone)))
+        oldest_ts_list.append(oldest_ts.tz_convert(ZoneInfo(args.timezone)))
+        conn.close()
 
-# Initialize with data, no date range initially.
-PHLTS_CALLBACK_DATA, initial_layout = serve_layout(
-    db_path=args.db_path,
-    days=args.days,
-    args=args,
-    min_date_available=min(oldest_ts_list),
-    max_date_available=max(latest_ts_list),
-    chunksize_list=chunksize_list,
-    start_date=None,
-    end_date=None,
-    timezone=args.timezone,
-    ignore_domains=args.ignore_domains,
-    hostname_display=args.hostname_display,
-    group_by_mac=args.group_by_mac,
-)
+    logging.info(
+        f"Latest date-time from all databases : {max(latest_ts_list)} (TZ: {args.timezone})"
+    )
+    logging.info(
+        f"Oldest date-time from all databases : {min(oldest_ts_list)} (TZ: {args.timezone})"
+    )
 
-logging.info("Setting initial layout...")
+    # Get DB last modified time
+    try:
+        mtime = os.path.getmtime(db_paths[0])
+        db_last_modified = datetime.datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+    except Exception as e:
+        logging.error(f"Error getting DB mtime: {e}")
+        db_last_modified = None
 
-app.layout = html.Div(
-    [
-        dcc.Loading(
-            id="loading-main",
-            type="graph",
-            fullscreen=True,
-            children=[
-                html.Div(
-                    id="page-container",
-                    children=initial_layout.children,
-                    className="container",
-                )
-            ],
-        )
-    ]
-)
+    # Initialize with data, no date range initially.
+    PHLTS_CALLBACK_DATA, initial_layout = serve_layout(
+        db_path=args.db_path,
+        days=args.days,
+        args=args,
+        min_date_available=min(oldest_ts_list),
+        max_date_available=max(latest_ts_list),
+        chunksize_list=chunksize_list,
+        start_date=None,
+        end_date=None,
+        timezone=args.timezone,
+        ignore_domains=args.ignore_domains,
+        hostname_display=args.hostname_display,
+        group_by_mac=args.group_by_mac,
+        db_last_modified=db_last_modified,
+    )
 
-del initial_layout
-gc.collect()
+    logging.info("Serving fresh layout...")
+
+    return html.Div(
+        [
+            dcc.Loading(
+                id="loading-main",
+                type="graph",
+                fullscreen=True,
+                children=[
+                    html.Div(
+                        id="page-container",
+                        children=initial_layout.children,
+                        className="container",
+                    )
+                ],
+            )
+        ]
+    )
+
+
+# Assign the function to app.layout so it runs on every page load
+app.layout = serve_fresh_layout
+
+
 
 
 @app.callback(

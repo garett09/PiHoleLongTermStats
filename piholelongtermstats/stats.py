@@ -53,13 +53,14 @@ def _top_clients_stats(stats, df):
     Compute top allowed/blocked client.
     """
     # top clients
-    stats["top_client"] = df["client"].value_counts().idxmax()
-    stats["top_allowed_client"] = (
-        df[df["status_type"] == "Allowed"]["client"].value_counts().idxmax()
-    )
-    stats["top_blocked_client"] = (
-        df[df["status_type"] == "Blocked"]["client"].value_counts().idxmax()
-    )
+    stats["top_client"] = df["client"].value_counts().idxmax() if not df.empty else "N/A"
+    
+    allowed_clients = df[df["status_type"] == "Allowed"]["client"].value_counts()
+    stats["top_allowed_client"] = allowed_clients.idxmax() if not allowed_clients.empty else "N/A"
+
+    blocked_clients = df[df["status_type"] == "Blocked"]["client"].value_counts()
+    stats["top_blocked_client"] = blocked_clients.idxmax() if not blocked_clients.empty else "N/A"
+    
     logging.info("Computed data for top clients.")
 
     return stats
@@ -69,34 +70,32 @@ def _domain_stats(stats, df):
     """
     Compute domain related stats
     """
-    stats["top_allowed_domain"] = (
-        df[df["status_type"] == "Allowed"]["domain"].value_counts().idxmax()
-    )
-    stats["top_blocked_domain"] = (
-        df[df["status_type"] == "Blocked"]["domain"].value_counts().idxmax()
-    )
+    allowed_domains = df[df["status_type"] == "Allowed"]["domain"].value_counts()
+    stats["top_allowed_domain"] = allowed_domains.idxmax() if not allowed_domains.empty else "N/A"
+    
+    blocked_domains = df[df["status_type"] == "Blocked"]["domain"].value_counts()
+    stats["top_blocked_domain"] = blocked_domains.idxmax() if not blocked_domains.empty else "N/A"
+    
     stats["top_allowed_domain_count"] = df[
         df["domain"] == stats["top_allowed_domain"]
     ].shape[0]
+    
     stats["top_blocked_domain_count"] = df[
         df["domain"] == stats["top_blocked_domain"]
     ].shape[0]
-    stats["top_allowed_domain_client"] = (
-        df[
-            (df["status_type"] == "Allowed")
-            & (df["domain"] == stats["top_allowed_domain"])
-        ]["client"]
-        .value_counts()
-        .idxmax()
-    )
-    stats["top_blocked_domain_client"] = (
-        df[
-            (df["status_type"] == "Blocked")
-            & (df["domain"] == stats["top_blocked_domain"])
-        ]["client"]
-        .value_counts()
-        .idxmax()
-    )
+    
+    allowed_domain_clients = df[
+        (df["status_type"] == "Allowed")
+        & (df["domain"] == stats["top_allowed_domain"])
+    ]["client"].value_counts()
+    stats["top_allowed_domain_client"] = allowed_domain_clients.idxmax() if not allowed_domain_clients.empty else "N/A"
+
+    blocked_domain_clients = df[
+        (df["status_type"] == "Blocked")
+        & (df["domain"] == stats["top_blocked_domain"])
+    ]["client"].value_counts()
+    stats["top_blocked_domain_client"] = blocked_domain_clients.idxmax() if not blocked_domain_clients.empty else "N/A"
+    
     logging.info("Computed data for domains.")
 
     return stats

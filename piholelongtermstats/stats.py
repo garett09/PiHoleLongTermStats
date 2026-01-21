@@ -112,10 +112,17 @@ def _most_persistent_stats(stats, df):
         .reset_index(name="count")
         .sort_values("count", ascending=False)
     )
-    most_persistent_row = persistence.iloc[0]
-    stats["most_persistent_client"] = most_persistent_row["client"]
-    stats["blocked_domain"] = most_persistent_row["domain"]
-    stats["repeat_attempts"] = most_persistent_row["count"]
+    
+    if not persistence.empty:
+        most_persistent_row = persistence.iloc[0]
+        stats["most_persistent_client"] = most_persistent_row["client"]
+        stats["blocked_domain"] = most_persistent_row["domain"]
+        stats["repeat_attempts"] = most_persistent_row["count"]
+    else:
+        stats["most_persistent_client"] = "N/A"
+        stats["blocked_domain"] = "N/A"
+        stats["repeat_attempts"] = 0
+    
     logging.info("Computed data for most persistent client.")
 
     del persistence
@@ -136,12 +143,13 @@ def _activity_stats(stats, df):
     allowed_date_counts = (
         df[df["status_type"] == "Allowed"].groupby("date")["domain"].count()
     )
-    stats["date_most_queries"] = query_date_counts.idxmax().strftime("%d %B %Y")
-    stats["date_most_blocked"] = blocked_date_counts.idxmax().strftime("%d %B %Y")
-    stats["date_most_allowed"] = allowed_date_counts.idxmax().strftime("%d %B %Y")
-    stats["date_least_queries"] = query_date_counts.idxmin().strftime("%d %B %Y")
-    stats["date_least_blocked"] = blocked_date_counts.idxmin().strftime("%d %B %Y")
-    stats["date_least_allowed"] = allowed_date_counts.idxmin().strftime("%d %B %Y")
+    
+    stats["date_most_queries"] = query_date_counts.idxmax().strftime("%d %B %Y") if not query_date_counts.empty else "N/A"
+    stats["date_most_blocked"] = blocked_date_counts.idxmax().strftime("%d %B %Y") if not blocked_date_counts.empty else "N/A"
+    stats["date_most_allowed"] = allowed_date_counts.idxmax().strftime("%d %B %Y") if not allowed_date_counts.empty else "N/A"
+    stats["date_least_queries"] = query_date_counts.idxmin().strftime("%d %B %Y") if not query_date_counts.empty else "N/A"
+    stats["date_least_blocked"] = blocked_date_counts.idxmin().strftime("%d %B %Y") if not blocked_date_counts.empty else "N/A"
+    stats["date_least_allowed"] = allowed_date_counts.idxmin().strftime("%d %B %Y") if not allowed_date_counts.empty else "N/A"
     logging.info("Computed data for activity stats based on date.")
 
     # activity stats based on hour
@@ -176,79 +184,114 @@ def _day_night_stats(stats, df):
     day_df = df[df["day_period"] == "Day"]
     night_df = df[df["day_period"] == "Night"]
 
+    # Day stats
     stats["day_total_queries"] = len(day_df)
-    stats["day_top_client"] = day_df["client"].value_counts().idxmax()
-    stats["day_top_allowed_client"] = (
-        day_df[day_df["status_type"] == "Allowed"]["client"].value_counts().idxmax()
-    )
-    stats["day_top_blocked_client"] = (
-        day_df[day_df["status_type"] == "Blocked"]["client"].value_counts().idxmax()
-    )
-    stats["day_top_allowed_domain"] = (
-        day_df[day_df["status_type"] == "Allowed"]["domain"].value_counts().idxmax()
-    )
-    stats["day_top_blocked_domain"] = (
-        day_df[day_df["status_type"] == "Blocked"]["domain"].value_counts().idxmax()
-    )
-    stats["day_top_allowed_domain_count"] = day_df[
-        day_df["domain"] == stats["day_top_allowed_domain"]
-    ].shape[0]
-    stats["day_top_blocked_domain_count"] = day_df[
-        day_df["domain"] == stats["day_top_blocked_domain"]
-    ].shape[0]
-    stats["day_top_allowed_domain_client"] = (
-        day_df[
-            (day_df["status_type"] == "Allowed")
-            & (day_df["domain"] == stats["day_top_allowed_domain"])
-        ]["client"]
-        .value_counts()
-        .idxmax()
-    )
-    stats["day_top_blocked_domain_client"] = (
-        day_df[
-            (day_df["status_type"] == "Blocked")
-            & (day_df["domain"] == stats["day_top_blocked_domain"])
-        ]["client"]
-        .value_counts()
-        .idxmax()
-    )
+    
+    if not day_df.empty:
+        stats["day_top_client"] = day_df["client"].value_counts().idxmax()
+        
+        day_allowed = day_df[day_df["status_type"] == "Allowed"]["client"].value_counts()
+        stats["day_top_allowed_client"] = day_allowed.idxmax() if not day_allowed.empty else "N/A"
+        
+        day_blocked = day_df[day_df["status_type"] == "Blocked"]["client"].value_counts()
+        stats["day_top_blocked_client"] = day_blocked.idxmax() if not day_blocked.empty else "N/A"
+        
+        day_allowed_domains = day_df[day_df["status_type"] == "Allowed"]["domain"].value_counts()
+        stats["day_top_allowed_domain"] = day_allowed_domains.idxmax() if not day_allowed_domains.empty else "N/A"
+        
+        day_blocked_domains = day_df[day_df["status_type"] == "Blocked"]["domain"].value_counts()
+        stats["day_top_blocked_domain"] = day_blocked_domains.idxmax() if not day_blocked_domains.empty else "N/A"
+        
+        stats["day_top_allowed_domain_count"] = day_df[
+            day_df["domain"] == stats["day_top_allowed_domain"]
+        ].shape[0] if stats["day_top_allowed_domain"] != "N/A" else 0
+        
+        stats["day_top_blocked_domain_count"] = day_df[
+            day_df["domain"] == stats["day_top_blocked_domain"]
+        ].shape[0] if stats["day_top_blocked_domain"] != "N/A" else 0
+        
+        if stats["day_top_allowed_domain"] != "N/A":
+            day_allowed_domain_clients = day_df[
+                (day_df["status_type"] == "Allowed")
+                & (day_df["domain"] == stats["day_top_allowed_domain"])
+            ]["client"].value_counts()
+            stats["day_top_allowed_domain_client"] = day_allowed_domain_clients.idxmax() if not day_allowed_domain_clients.empty else "N/A"
+        else:
+            stats["day_top_allowed_domain_client"] = "N/A"
+        
+        if stats["day_top_blocked_domain"] != "N/A":
+            day_blocked_domain_clients = day_df[
+                (day_df["status_type"] == "Blocked")
+                & (day_df["domain"] == stats["day_top_blocked_domain"])
+            ]["client"].value_counts()
+            stats["day_top_blocked_domain_client"] = day_blocked_domain_clients.idxmax() if not day_blocked_domain_clients.empty else "N/A"
+        else:
+            stats["day_top_blocked_domain_client"] = "N/A"
+    else:
+        stats["day_top_client"] = "N/A"
+        stats["day_top_allowed_client"] = "N/A"
+        stats["day_top_blocked_client"] = "N/A"
+        stats["day_top_allowed_domain"] = "N/A"
+        stats["day_top_blocked_domain"] = "N/A"
+        stats["day_top_allowed_domain_count"] = 0
+        stats["day_top_blocked_domain_count"] = 0
+        stats["day_top_allowed_domain_client"] = "N/A"
+        stats["day_top_blocked_domain_client"] = "N/A"
 
+    # Night stats
     stats["night_total_queries"] = len(night_df)
-    stats["night_top_client"] = night_df["client"].value_counts().idxmax()
-    stats["night_top_allowed_client"] = (
-        night_df[night_df["status_type"] == "Allowed"]["client"].value_counts().idxmax()
-    )
-    stats["night_top_blocked_client"] = (
-        night_df[night_df["status_type"] == "Blocked"]["client"].value_counts().idxmax()
-    )
-    stats["night_top_allowed_domain"] = (
-        night_df[night_df["status_type"] == "Allowed"]["domain"].value_counts().idxmax()
-    )
-    stats["night_top_blocked_domain"] = (
-        night_df[night_df["status_type"] == "Blocked"]["domain"].value_counts().idxmax()
-    )
-    stats["night_top_allowed_domain_count"] = night_df[
-        night_df["domain"] == stats["night_top_allowed_domain"]
-    ].shape[0]
-    stats["night_top_blocked_domain_count"] = night_df[
-        night_df["domain"] == stats["night_top_blocked_domain"]
-    ].shape[0]
-    stats["night_top_allowed_domain_client"] = (
-        night_df[
-            (night_df["status_type"] == "Allowed")
-            & (night_df["domain"] == stats["night_top_allowed_domain"])
-        ]["client"]
-        .value_counts()
-        .idxmax()
-    )
-    stats["night_top_blocked_domain_client"] = (
-        night_df[
-            (night_df["status_type"] == "Blocked")
-            & (night_df["domain"] == stats["night_top_blocked_domain"])
-        ]["client"]
-        .value_counts()
-        .idxmax()
-    )
+    
+    if not night_df.empty:
+        stats["night_top_client"] = night_df["client"].value_counts().idxmax()
+        
+        night_allowed = night_df[night_df["status_type"] == "Allowed"]["client"].value_counts()
+        stats["night_top_allowed_client"] = night_allowed.idxmax() if not night_allowed.empty else "N/A"
+        
+        night_blocked = night_df[night_df["status_type"] == "Blocked"]["client"].value_counts()
+        stats["night_top_blocked_client"] = night_blocked.idxmax() if not night_blocked.empty else "N/A"
+        
+        night_allowed_domains = night_df[night_df["status_type"] == "Allowed"]["domain"].value_counts()
+        stats["night_top_allowed_domain"] = night_allowed_domains.idxmax() if not night_allowed_domains.empty else "N/A"
+        
+        night_blocked_domains = night_df[night_df["status_type"] == "Blocked"]["domain"].value_counts()
+        stats["night_top_blocked_domain"] = night_blocked_domains.idxmax() if not night_blocked_domains.empty else "N/A"
+        
+        stats["night_top_allowed_domain_count"] = night_df[
+            night_df["domain"] == stats["night_top_allowed_domain"]
+        ].shape[0] if stats["night_top_allowed_domain"] != "N/A" else 0
+        
+        stats["night_top_blocked_domain_count"] = night_df[
+            night_df["domain"] == stats["night_top_blocked_domain"]
+        ].shape[0] if stats["night_top_blocked_domain"] != "N/A" else 0
+        
+        if stats["night_top_allowed_domain"] != "N/A":
+            night_allowed_domain_clients = night_df[
+                (night_df["status_type"] == "Allowed")
+                & (night_df["domain"] == stats["night_top_allowed_domain"])
+            ]["client"].value_counts()
+            stats["night_top_allowed_domain_client"] = night_allowed_domain_clients.idxmax() if not night_allowed_domain_clients.empty else "N/A"
+        else:
+            stats["night_top_allowed_domain_client"] = "N/A"
+        
+        if stats["night_top_blocked_domain"] != "N/A":
+            night_blocked_domain_clients = night_df[
+                (night_df["status_type"] == "Blocked")
+                & (night_df["domain"] == stats["night_top_blocked_domain"])
+            ]["client"].value_counts()
+            stats["night_top_blocked_domain_client"] = night_blocked_domain_clients.idxmax() if not night_blocked_domain_clients.empty else "N/A"
+        else:
+            stats["night_top_blocked_domain_client"] = "N/A"
+    else:
+        stats["night_top_client"] = "N/A"
+        stats["night_top_allowed_client"] = "N/A"
+        stats["night_top_blocked_client"] = "N/A"
+        stats["night_top_allowed_domain"] = "N/A"
+        stats["night_top_blocked_domain"] = "N/A"
+        stats["night_top_allowed_domain_count"] = 0
+        stats["night_top_blocked_domain_count"] = 0
+        stats["night_top_allowed_domain_client"] = "N/A"
+        stats["night_top_blocked_domain_client"] = "N/A"
+
 
     logging.info("Computed data for day and night stats.")
 
@@ -271,31 +314,42 @@ def _streak_stats(stats, df_sorted):
         streak_length=("is_allowed", "size"), start_time=("timestamp", "first")
     )
 
-    longest_streak_blocked = streaks_blocked.loc[
-        streaks_blocked["streak_length"].idxmax()
-    ]
-    stats["longest_streak_length_blocked"] = int(
-        longest_streak_blocked["streak_length"]
-    )
-    stats["streak_date_blocked"] = longest_streak_blocked["start_time"].strftime(
-        "%d %B %Y"
-    )
-    stats["streak_hour_blocked"] = longest_streak_blocked["start_time"].strftime(
-        "%H:%M"
-    )
+    if not streaks_blocked.empty:
+        longest_streak_blocked = streaks_blocked.loc[
+            streaks_blocked["streak_length"].idxmax()
+        ]
+        stats["longest_streak_length_blocked"] = int(
+            longest_streak_blocked["streak_length"]
+        )
+        stats["streak_date_blocked"] = longest_streak_blocked["start_time"].strftime(
+            "%d %B %Y"
+        )
+        stats["streak_hour_blocked"] = longest_streak_blocked["start_time"].strftime(
+            "%H:%M"
+        )
+    else:
+        stats["longest_streak_length_blocked"] = 0
+        stats["streak_date_blocked"] = "N/A"
+        stats["streak_hour_blocked"] = "N/A"
 
-    longest_streak_allowed = streaks_allowed.loc[
-        streaks_allowed["streak_length"].idxmax()
-    ]
-    stats["longest_streak_length_allowed"] = int(
-        longest_streak_allowed["streak_length"]
-    )
-    stats["streak_date_allowed"] = longest_streak_allowed["start_time"].strftime(
-        "%d %B %Y"
-    )
-    stats["streak_hour_allowed"] = longest_streak_allowed["start_time"].strftime(
-        "%H:%M"
-    )
+    if not streaks_allowed.empty:
+        longest_streak_allowed = streaks_allowed.loc[
+            streaks_allowed["streak_length"].idxmax()
+        ]
+        stats["longest_streak_length_allowed"] = int(
+            longest_streak_allowed["streak_length"]
+        )
+        stats["streak_date_allowed"] = longest_streak_allowed["start_time"].strftime(
+            "%d %B %Y"
+        )
+        stats["streak_hour_allowed"] = longest_streak_allowed["start_time"].strftime(
+            "%H:%M"
+        )
+    else:
+        stats["longest_streak_length_allowed"] = 0
+        stats["streak_date_allowed"] = "N/A"
+        stats["streak_hour_allowed"] = "N/A"
+
 
     logging.info("Computed data for streak stats.")
 
@@ -355,8 +409,13 @@ def _unique_stats(stats, df):
         df.groupby("client")["domain"].nunique().reset_index(name="unique_domains")
     )
     diverse_client_df = diverse_client_df.sort_values("unique_domains", ascending=False)
-    stats["most_diverse_client"] = diverse_client_df.iloc[0]["client"]
-    stats["unique_domains_count"] = int(diverse_client_df.iloc[0]["unique_domains"])
+    
+    if not diverse_client_df.empty:
+        stats["most_diverse_client"] = diverse_client_df.iloc[0]["client"]
+        stats["unique_domains_count"] = int(diverse_client_df.iloc[0]["unique_domains"])
+    else:
+        stats["most_diverse_client"] = "N/A"
+        stats["unique_domains_count"] = 0
 
     del diverse_client_df
     gc.collect()
@@ -373,11 +432,16 @@ def _reply_time_stats(stats, df):
     stats["min_reply_time"] = round(df["reply_time"].dropna().abs().min() * 1000, 3)
 
     avg_reply_times = df.groupby("domain")["reply_time"].mean().reset_index()
-    slowest_domain_row = avg_reply_times.sort_values(
-        "reply_time", ascending=False
-    ).iloc[0]
-    stats["slowest_domain"] = slowest_domain_row["domain"]
-    stats["slowest_avg_reply_time"] = slowest_domain_row["reply_time"]
+    avg_reply_times = avg_reply_times.sort_values("reply_time", ascending=False)
+    
+    if not avg_reply_times.empty:
+        slowest_domain_row = avg_reply_times.iloc[0]
+        stats["slowest_domain"] = slowest_domain_row["domain"]
+        stats["slowest_avg_reply_time"] = slowest_domain_row["reply_time"]
+    else:
+        stats["slowest_domain"] = "N/A"
+        stats["slowest_avg_reply_time"] = 0
+    
     logging.info("Computed data for reply time stats.")
 
     return stats

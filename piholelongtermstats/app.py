@@ -1475,7 +1475,16 @@ def reload_page(n_clicks, q1, qw, qm, q3m, qy, qall, start_date, end_date):
         chunksize_list.append(chunksize)
         latest_ts_list.append(latest_ts.tz_convert(ZoneInfo(args.timezone)))
         oldest_ts_list.append(oldest_ts.tz_convert(ZoneInfo(args.timezone)))
+        oldest_ts_list.append(oldest_ts.tz_convert(ZoneInfo(args.timezone)))
         conn.close()
+
+    # Get DB last modified time
+    try:
+        mtime = os.path.getmtime(db_paths[0])
+        db_last_modified = datetime.datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+    except Exception as e:
+        logging.error(f"Error getting DB mtime: {e}")
+        db_last_modified = None
 
     PHLTS_CALLBACK_DATA, layout = serve_layout(
         db_path=args.db_path,
@@ -1490,6 +1499,7 @@ def reload_page(n_clicks, q1, qw, qm, q3m, qy, qall, start_date, end_date):
         ignore_domains=args.ignore_domains,
         hostname_display=args.hostname_display,
         group_by_mac=args.group_by_mac,
+        db_last_modified=db_last_modified,
     )
 
     return layout.children

@@ -165,6 +165,7 @@ def serve_layout(
     hostname_display="hostname",
     group_by_mac=False,
     unbound_stats=None,
+    db_last_modified=None,
 ):
     """Read pihole ftl db, process data, compute stats"""
 
@@ -364,6 +365,11 @@ def serve_layout(
                     html.Br(),
                     html.H6(
                         f"Timezone is {timezone}. Database records begin on {stats['oldest_data_point']} and end on {stats['latest_data_point']}."
+                    ),
+                    html.Br(),
+                    html.H6(
+                        f"Database Last Refreshed: {db_last_modified}" if db_last_modified else "Database Last Refreshed: Unknown",
+                        style={"color": "#2ecc71" if db_last_modified else "#777"}
                     ),
                 ],
                 className="sub-heading-card",
